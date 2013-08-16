@@ -81,7 +81,7 @@ subscribeUser :: ListId
               -> Maybe Bool 
               -> Maybe Bool 
               -> Maybe Bool 
-              -> Mailchimp EmailReturn
+              -> MailchimpT m EmailReturn
 subscribeUser listId 
               emailId 
               mergeVars 
@@ -110,6 +110,7 @@ data AbuseReport = AbuseReport
   , arCampaignId :: CampaignId
   , arType :: Text
   }
+  deriving (Show)
 
 instance FromJSON AbuseReport where
   parseJSON (Object v) = AbuseReport         <$> 
@@ -123,12 +124,13 @@ data AbuseResults = AbuseResults
   { arTotal :: Int
   , arData :: [AbuseReport]
   }
+  deriving (Show)
 
 instance FromJSON AbuseResults where
   parseJSON (Object v) = AbuseResults <$> v .: "total" <*> v.: "data"
   parseJSON _ = mzero
 
-abuseReports :: ListId -> Maybe Int -> Maybe Int -> Maybe UTCTime -> Mailchimp AbuseResults
+abuseReports :: ListId -> Maybe Int -> Maybe Int -> Maybe UTCTime -> MailchimpT m AbuseResults
 abuseReports listId start limit since = do
   apiKey <- askApiKey
   liftIO $ print $ request apiKey

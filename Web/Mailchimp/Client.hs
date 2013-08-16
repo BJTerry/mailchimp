@@ -21,7 +21,8 @@ import Data.Time.Format (formatTime)
 import System.Locale (defaultTimeLocale)
 import Data.Time.Clock (UTCTime)
 import Data.Time.Format (parseTime)
-import Control.Monad.Logger (logDebug, LoggingT, runStderrLoggingT)
+import Control.Monad.Logger (logDebug, LoggingT, runStderrLoggingT, MonadLogger)
+import Control.Monad.Base (MonadBase)
 
 data MailchimpConfig = MailchimpConfig 
   { mcApiKey :: MailchimpApiKey
@@ -29,7 +30,7 @@ data MailchimpConfig = MailchimpConfig
   }
 
 -- | Convenience method to ask ReaderT for the current API key
-askApiKey :: Mailchimp MailchimpApiKey
+askApiKey :: MailchimpT m MailchimpApiKey
 askApiKey = fmap mcApiKey ask
 
 -- | Creates a MailchimpConfig with a new Manager
@@ -40,12 +41,16 @@ defaultMailchimpConfig apiKey = do
                          , mcManager = man
                          }
 
-type Mailchimp a = LogginT (ReaderT MailchimpConfig (ResourceT IO)) a
+type MailchimpT m a =  (MonadIO m, MonadLogger m, MonadBase IO m) => ReaderT MailchimpConfig m a
 
-runMailchimp :: (MonadIO m) => MailchimpConfig -> Mailchimp a -> m a
-runMailchimp config action = 
-  liftIO $ runResourceT $ flip runReaderT config $ runStderrLoggingT action
+runMailchimpT :: (MonadIO m, MonadLogger m, MonadBase IO m) => MailchimpConfig -> MailchimpT m a -> m a
+runMailchimpT config action = 
+  flip runReaderT config action
 
+-- | Runs Mailchimp in IO, ignoring the existing monadic context and logging to stderr
+runMailchimp :: (MonadIO m) => (MailchimpConfig -> MailchimpT (LoggingT IO) a -> m a)
+runMailchimp config action =
+  liftIO $ runStderrLoggingT $ flip runReaderT config action
 
 -- | Represents a mailchimp api key, which implicitly includes a datacenter.
 data MailchimpApiKey = MailchimpApiKey
@@ -77,19 +82,22 @@ apiEndpointUrl :: Text -> Text -> Text -> Text
 apiEndpointUrl datacenter section apiMethod = 
   Data.Text.concat ["https://", datacenter, ".api.mailchimp.com/2.0/", section, "/", apiMethod, ".json"]
 
-query :: (FromJSON x) => Text -> Text -> Value -> Mailchimp x
+-- | Perform a query to Mailchimp. Should only be necessary for unimplemented methods.
+query :: (FromJSON x) => Text -> Text -> Value -> MailchimpT m x
 query section apiMethod request = do
   config <- ask
   initReq <- liftIO $ parseUrl $ unpack $ apiEndpointUrl (makDatacenter $ mcApiKey config) section apiMethod
   let req = initReq { requestBody = RequestBodyLBS $ encode request 
                     , method = methodPost
                     }
-  response <- catch (httpLbs req $ mcManager config) catchHttpException
+  $(logDebug) $ pack . show $ requestBody req
+  response <- liftIO $ runResourceT $ catch (httpLbs req $ mcManager config) catchHttpException
+  $(logDebug) $ pack . show $ responseBody response
   case decode $ responseBody response of
     Just result -> return result
     Nothing -> throwIO $ OtherMailchimpError (-1) "ParseError" "Could not parse result JSON from Mailchimp"
  where
-  catchHttpException :: HttpException -> Mailchimp a
+  catchHttpException :: HttpException -> ResourceT IO a
   catchHttpException e@(StatusCodeException _ headers _) = do
     maybe (throwIO e) id (throwIO `fmap` (decodeError headers))
   catchHttpException e = throwIO e
@@ -155,9 +163,4 @@ instance ToJSON MCTime where
 instance FromJSON MCTime where
   parseJSON (String s) = maybe mzero (return . MCTime) $ parseTime defaultTimeLocale mcFormatString (unpack s)
   parseJSON _ = mzero
-  
 
-test = do
-  cfg <- defaultMailchimpConfig (MailchimpApiKey "123" "123")
-  runMailchimp cfg $ do
-    $(logDebug) "This is a test"
