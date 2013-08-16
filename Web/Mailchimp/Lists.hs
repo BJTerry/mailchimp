@@ -5,7 +5,7 @@ import Data.Text (Text(..), unpack)
 import Data.Aeson (Value, object, (.=), decode, ToJSON(..), FromJSON(..), (.:), (.:?), Value(..))
 import Data.Aeson.Types (Pair)
 import Data.Aeson.Encode (encode)
-import Network.HTTP.Conduit (parseUrl, requestBody, newManager, httpLbs, RequestBody(..), Response(..), HttpException(..))
+import Network.HTTP.Conduit (parseUrl, requestBody, newManager, httpLbs, Response(..), HttpException(..))
 import Data.Default (def)
 import Control.Monad.Error (throwError)
 import Control.Exception.Lifted (throwIO, catch)
@@ -15,9 +15,13 @@ import Control.Monad.IO.Class (liftIO)
 import Control.Monad (mzero, liftM)
 import Control.Applicative ((<*>), (<$>))
 import Data.ByteString.Lazy (fromStrict)
+import Network.HTTP.Conduit (parseUrl, requestBody, newManager, httpLbs, RequestBody(..), Response(..), HttpException(..))
 
+
+-- | Represents an individual mailing list
 newtype ListId = ListId {unListId :: Text}
 
+-- | Represents one of the canonical ways of identifying subscribers
 data EmailId = Email Text
              | EmailUniqueId Text
              | ListEmailId Text
@@ -33,30 +37,24 @@ unEmailId (Email t) = t
 unEmailId (EmailUniqueId t) = t
 unEmailId (ListEmailId t) = t
 
-data EmailReturn = EmailReturn { erEmail :: Maybe EmailId
-                               , erEmailUniqueId :: Maybe EmailId
-                               , erListEmailId :: Maybe EmailId
+data EmailReturn = EmailReturn { erEmail :: EmailId
+                               , erEmailUniqueId :: EmailId
+                               , erListEmailId :: EmailId
                                }
   deriving (Show)
 
-instance FromJSON (EmailId, EmailId, EmailId) where
+instance FromJSON EmailReturn where
   parseJSON (Object v) = do
     email <- v .: "email"
     euid <- v .: "euid"
     leid <- v .: "leid"
-    return ((Email email), (EmailUniqueId euid), (ListEmailId leid))
+    return $ EmailReturn (Email email) (EmailUniqueId euid) (ListEmailId leid)
   parseJSON _ = mzero
 
-instance FromJSON EmailReturn where
-  parseJSON (Object v) = do
-    email <- v .:? "email"
-    euid <- v .:? "euid"
-    leid <- v .:? "leid"
-    return $ EmailReturn (fmap Email email) (fmap EmailUniqueId euid) (fmap ListEmailId leid)
-  parseJSON _ = mzero
-
+-- | Represents an individual merge variable
 type MergeVarsItem = Pair
 
+-- | The type of e-mail your user will receive
 data EmailType = EmailTypeHTML
                | EmailTypeText
   deriving (Show)
@@ -97,20 +95,14 @@ subscribeUser apiKey
                            ]
   let req = initReq { requestBody = RequestBodyLBS $ encode requestJson }
   man <- liftIO $ newManager def 
-  
   response <- catch (httpLbs req man) 
     (\e -> 
       case e :: HttpException of
         StatusCodeException _ headers _ -> do
           let (mResponse :: Maybe MailchimpError) = fromStrict `fmap` (lookup "X-Response-Body-Start" headers) >>= decode
-          liftIO $ print (lookup "X-Response-Body-Start" headers)
-          liftIO $ print mResponse
           maybe (throwIO e) id (throwIO `fmap` mResponse)
         _ -> throwIO e)
-  liftIO $ print $ responseBody response
-  let meResult = maybe (fmap Right $ decode $ responseBody response) id (fmap (Just . Left) $ decode $ responseBody response)
-  case meResult of
-    Just (Left mcError) -> throwIO (mcError :: MailchimpError)
-    Just (Right emailIdTriple) -> return emailIdTriple
+  let mResult = decode $ responseBody response
+  case mResult of
+    Just emailResult -> return emailResult
     Nothing -> throwIO $ OtherMailchimpError (-1) "ParseError" "Could not parse result JSON from Mailchimp"
-
