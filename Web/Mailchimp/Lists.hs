@@ -81,9 +81,10 @@ subscribeUser apiKey
               doubleOptin 
               updateExisting 
               replaceInterests 
-              sendWelcome = runResourceT $ do
-  initReq <- parseUrl $ unpack $ apiEndpointUrl (makDatacenter apiKey) "lists" "subscribe"
-  let requestJson = object [ "apikey" .= makApiKey apiKey
+              sendWelcome = 
+  query apiKey "lists" "subscribe" request
+ where
+  request = object [ "apikey" .= makApiKey apiKey
                            , "id" .= unListId listId
                            , "email" .= emailId
                            , "merge_vars" .= fmap object mergeVars
@@ -93,16 +94,3 @@ subscribeUser apiKey
                            , "replace_interests" .= replaceInterests
                            , "send_welcome" .= sendWelcome
                            ]
-  let req = initReq { requestBody = RequestBodyLBS $ encode requestJson }
-  man <- liftIO $ newManager def 
-  response <- catch (httpLbs req man) 
-    (\e -> 
-      case e :: HttpException of
-        StatusCodeException _ headers _ -> do
-          let (mResponse :: Maybe MailchimpError) = fromStrict `fmap` (lookup "X-Response-Body-Start" headers) >>= decode
-          maybe (throwIO e) id (throwIO `fmap` mResponse)
-        _ -> throwIO e)
-  let mResult = decode $ responseBody response
-  case mResult of
-    Just emailResult -> return emailResult
-    Nothing -> throwIO $ OtherMailchimpError (-1) "ParseError" "Could not parse result JSON from Mailchimp"

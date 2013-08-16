@@ -8,14 +8,28 @@ import Control.Monad (mzero, liftM)
 import Control.Monad.IO.Class (liftIO)
 import Data.Default (def)
 import Data.ByteString.Lazy (fromStrict)
+import qualified Data.ByteString.Lazy as LBS (ByteString)
 import Data.Text (Text(..), pack, concat, unpack)
 import Data.Typeable (Typeable)
 import Data.Aeson (FromJSON(..), (.:), Value(..), decode)
 import Data.Aeson.Encode (encode)
 import Data.Conduit (runResourceT)
-import Network.HTTP.Conduit (parseUrl, requestBody, newManager, httpLbs, RequestBody(..), Response(..), HttpException(..))
+import Network.HTTP.Conduit (parseUrl, newManager, httpLbs, RequestBody(..), Response(..), HttpException(..), Request(..))
+import Network.HTTP.Types (methodPost)
 import Network.HTTP.Types.Header (ResponseHeaders(..))
 import Control.Monad.Base (MonadBase)
+
+
+data MailchimpConfig = MailchimpConfig 
+  { mcApiKey :: MailchimpApiKey
+  , mcManager :: Manager
+  }
+
+defaultMailchimpConfig apiKey = do
+  man <- liftIO $ newManager def
+  return MailchimpConfig { mcApiKey = apiKey
+                         , mcManager = man
+                         }
 
 -- | Represents a mailchimp api key, which implicitly includes a datacenter.
 data MailchimpApiKey = MailchimpApiKey
@@ -50,7 +64,9 @@ apiEndpointUrl datacenter section method =
 query :: FromJSON x => MailchimpApiKey -> Text -> Text -> Value -> IO x
 query apiKey section method request = runResourceT $ do
   initReq <- parseUrl $ unpack $ apiEndpointUrl (makDatacenter apiKey) section method
-  let req = initReq { requestBody = RequestBodyLBS $ encode request }
+  let req = initReq { requestBody = RequestBodyLBS $ encode request 
+                    , method = methodPost
+                    }
   man <- liftIO $ newManager def
   response <- catch (httpLbs req man) catchHttpException
   case decode $ responseBody response of

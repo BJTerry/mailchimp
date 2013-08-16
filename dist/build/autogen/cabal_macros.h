@@ -14,6 +14,13 @@
   (major1) == 4 && (major2) <  6 || \
   (major1) == 4 && (major2) == 6 && (minor) <= 0)
 
+/* package bytestring-0.10.0.2 */
+#define VERSION_bytestring "0.10.0.2"
+#define MIN_VERSION_bytestring(major1,major2,minor) (\
+  (major1) <  0 || \
+  (major1) == 0 && (major2) <  10 || \
+  (major1) == 0 && (major2) == 10 && (minor) <= 0)
+
 /* package conduit-1.0.7.1 */
 #define VERSION_conduit "1.0.7.1"
 #define MIN_VERSION_conduit(major1,major2,minor) (\
@@ -34,6 +41,20 @@
   (major1) <  1 || \
   (major1) == 1 && (major2) <  9 || \
   (major1) == 1 && (major2) == 9 && (minor) <= 4)
+
+/* package http-types-0.8.0 */
+#define VERSION_http_types "0.8.0"
+#define MIN_VERSION_http_types(major1,major2,minor) (\
+  (major1) <  0 || \
+  (major1) == 0 && (major2) <  8 || \
+  (major1) == 0 && (major2) == 8 && (minor) <= 0)
+
+/* package lifted-base-0.2.1.0 */
+#define VERSION_lifted_base "0.2.1.0"
+#define MIN_VERSION_lifted_base(major1,major2,minor) (\
+  (major1) <  0 || \
+  (major1) == 0 && (major2) <  2 || \
+  (major1) == 0 && (major2) == 2 && (minor) <= 1)
 
 /* package mtl-2.1.2 */
 #define VERSION_mtl "2.1.2"
@@ -62,4 +83,11 @@
   (major1) <  0 || \
   (major1) == 0 && (major2) <  3 || \
   (major1) == 0 && (major2) == 3 && (minor) <= 0)
+
+/* package transformers-base-0.4.1 */
+#define VERSION_transformers_base "0.4.1"
+#define MIN_VERSION_transformers_base(major1,major2,minor) (\
+  (major1) <  0 || \
+  (major1) == 0 && (major2) <  4 || \
+  (major1) == 0 && (major2) == 4 && (minor) <= 1)
 
