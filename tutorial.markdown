@@ -306,3 +306,88 @@ Wunderbar! Of course, we don't want to write such a long function for each of Ma
                        , "replace_interests" .= replaceInterests
                        , "send_welcome" .= sendWelcome
                        ]
+
+Note that because of our type annotations in catchHttpException, we have to use Flexibleinstances in this case.
+
+There are still a couple improvements that could be made to the library. First, we are creating a new Manager each time query is called, which is very inefficient as it's an expensive operation (according to the documentation, at least). Second, if you are making multiple calls within the library, the current syntax could be slightly improved. Suppose that you want to delete all your folders created before a certain date, and you are in a non-IO monadic context, such as in a Yesod Handler. The code to perform that operation would look like this:
+
+    liftIO $ do
+      now <- getCurrentTime
+      folders <- listFolders apiKey "campaign"
+      mapM_ (\f -> deleteFolder apiKey (folderId f) (folderType f)) $ 
+        filter (\folder -> dateCreated folder < (now - 60 * 60 * 24 * 7)) folders
+
+For every action, we are passing in apiKey even though the key is obviously not changing. One can imagine even more complex actions where it would be more of a burden. To solve this problem and the problem of creating potentially hundreds of managers, let's wrap up our actions in a monad. But first, we'll create a MailchimpConfig type to carry the apiKey and the shared Manager:
+
+    data MailchimpConfig = MailchimpConfig 
+      { mcApiKey :: MailchimpApiKey
+      , mcManager :: Manager
+      }
+
+    -- | Creates a MailchimpConfig with a new Manager
+    defaultMailchimpConfig :: MonadIO m => MailchimpApiKey -> m MailchimpConfig
+    defaultMailchimpConfig apiKey = do
+      man <- liftIO $ newManager def
+      return MailchimpConfig { mcApiKey = apiKey
+                             , mcManager = man
+                             }
+
+    type Mailchimp a = ReaderT MailchimpConfig (ResourceT IO) a
+
+    runMailchimp :: (MonadIO m) => MailchimpConfig -> Mailchimp a -> m a
+    runMailchimp config action = 
+      liftIO $ runResourceT $ flip runReaderT config $ action
+
+MailchimpConfig is just a simple type to carry around the configuration, and a way to create a default configuration with a new Manager. We will run all of our actions in the Mailchimp Monad stack, which is IO, ResourceT (used by Network.HTTP.Conduit) and a ReaderT, which will allow us to query the MailchimpConfig without having to pass it around in every function.
+
+The final versions of query and subscribeUser now look like this:
+
+    query :: (FromJSON x) => Text -> Text -> Value -> Mailchimp x
+    query section method request = do
+      config <- ask
+      initReq <- liftIO $ parseUrl $ unpack $ apiEndpointUrl (makDatacenter $ mcApiKey config) section method
+      let req = initReq { requestBody = RequestBodyLBS $ encode request 
+                        , method = methodPost
+                        }
+      response <- catch (httpLbs req $ mcManager config) catchHttpException
+      case decode $ responseBody response of
+        Just result -> return result
+        Nothing -> throwIO $ OtherMailchimpError (-1) "ParseError" "Could not parse result JSON from Mailchimp"
+     where
+      catchHttpException :: HttpException -> Mailchimp a
+      catchHttpException e@(StatusCodeException _ headers _) = do
+        maybe (throwIO e) id (throwIO `fmap` (decodeError headers))
+      catchHttpException e = throwIO e
+      decodeError :: ResponseHeaders -> Maybe MailchimpError
+      decodeError headers = fromStrict `fmap` (lookup "X-Response-Body-Start" headers) >>= decode
+
+    subscribeUser :: ListId 
+                  -> EmailId 
+                  -> Maybe [MergeVarsItem] 
+                  -> Maybe EmailType
+                  -> Maybe Bool 
+                  -> Maybe Bool 
+                  -> Maybe Bool 
+                  -> Maybe Bool 
+                  -> Mailchimp EmailReturn
+    subscribeUser listId 
+                  emailId 
+                  mergeVars 
+                  emailType 
+                  doubleOptin 
+                  updateExisting 
+                  replaceInterests 
+                  sendWelcome = do
+      apiKey <- askApiKey
+      query "lists" "subscribe" $ request apiKey
+     where
+      request apiKey = object [ "apikey" .= makApiKey apiKey
+                              , "id" .= unListId listId
+                              , "email" .= emailId
+                              , "merge_vars" .= fmap object mergeVars
+                              , "email_type" .= emailType
+                              , "double_optin" .= doubleOptin
+                              , "update_existing" .= updateExisting
+                              , "replace_interests" .= replaceInterests
+                              , "send_welcome" .= sendWelcome
+                              ]

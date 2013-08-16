@@ -17,10 +17,12 @@ cabal-version:       >=1.8
 library
   exposed-modules:    Web.Mailchimp.Lists
                       Web.Mailchimp.Client 
+                      Web.Mailchimp.Campaigns
   -- other-modules:       
   extensions: OverloadedStrings
               DeriveDataTypeable
               FlexibleContexts
+              TemplateHaskell
 
   build-depends:       base     >= 4     && < 5
                ,       text     >= 0.11  && < 1
@@ -28,6 +30,9 @@ library
                ,       transformers >= 0.3
                ,       transformers-base >= 0.4
                ,       lifted-base >= 0.2
+               ,       monad-control >= 0.3
+               ,       resourcet >= 0.4
+               ,       monad-logger >= 0.3
                ,       bytestring >= 0.10
                ,       aeson    >= 0.6   && < 0.7
                ,       parsec   >= 3.1   && < 4.0
@@ -35,3 +40,5 @@ library
                ,       http-conduit >= 1.9 
                ,       http-types >= 0.8
                ,       data-default >= 0.5
+               ,       time >= 1.4
+               ,       old-locale >= 1.0
