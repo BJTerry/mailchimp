@@ -59,7 +59,7 @@ data MailchimpApiKey = MailchimpApiKey
   { makApiKey :: Text -- Full API key including datacenter
   , makDatacenter :: Text -- 2-letter datacenter code
   }
-  deriving (Show)
+  deriving (Show, Eq)
 
 -- | Create a mailchimp key from Text
 mailchimpKey :: Text -> Maybe MailchimpApiKey
@@ -137,7 +137,7 @@ data MailchimpError = InvalidApiKey Int Text Text
                     | EmailNotExists Int Text Text
 
                     | OtherMailchimpError Int Text Text
-  deriving (Typeable, Show)
+  deriving (Typeable, Show, Eq)
 
 instance Exception MailchimpError
 
