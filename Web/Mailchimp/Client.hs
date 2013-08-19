@@ -10,7 +10,8 @@ import Data.Default (def)
 import Data.ByteString.Lazy (fromStrict)
 import Data.Text (Text, pack, concat, unpack)
 import Data.Typeable (Typeable)
-import Data.Aeson (ToJSON(..), FromJSON(..), (.:), Value(..), decode, object)
+import Data.Aeson (ToJSON(..), FromJSON(..), (.:), Value(..), decode, object, (.=))
+import Data.Aeson.Types (Pair)
 import Data.Aeson.Encode (encode)
 import Data.Conduit (runResourceT, ResourceT)
 import Network.HTTP.Conduit (parseUrl, newManager, httpLbs, RequestBody(..), Response(..), HttpException(..), Request(..), Manager)
@@ -23,6 +24,7 @@ import Data.Time.Clock (UTCTime)
 import Data.Time.Format (parseTime)
 import Control.Monad.Logger (logDebug, LoggingT, runStderrLoggingT, MonadLogger)
 import Control.Monad.Base (MonadBase)
+import Data.Char (isAlpha, toLower, isUpper)
 
 data MailchimpConfig = MailchimpConfig 
   { mcApiKey :: MailchimpApiKey
@@ -82,9 +84,17 @@ apiEndpointUrl :: Text -> Text -> Text -> Text
 apiEndpointUrl datacenter section apiMethod = 
   Data.Text.concat ["https://", datacenter, ".api.mailchimp.com/2.0/", section, "/", apiMethod, ".json"]
 
--- | Perform a query to Mailchimp. Should only be necessary for unimplemented methods.
-query :: (FromJSON x) => Text -> Text -> Value -> MailchimpT m x
+-- | Perform a query to Mailchimp. Should only be necessary to call directly for 
+--   unimplemented methods.
+query :: (FromJSON x) => Text -> Text -> [Pair] -> MailchimpT m x
 query section apiMethod request = do
+  apikey <- fmap makApiKey askApiKey
+  query' section apiMethod $ filterObject ("apikey" .= apikey : request)
+
+-- | Perform a query to Mailchimp. Should only be necessary to call directly for 
+--   unimplemented methods.
+query' :: (FromJSON x) => Text -> Text -> Value -> MailchimpT m x
+query' section apiMethod request = do
   config <- ask
   initReq <- liftIO $ parseUrl $ unpack $ apiEndpointUrl (makDatacenter $ mcApiKey config) section apiMethod
   let req = initReq { requestBody = RequestBodyLBS $ encode request 
@@ -112,10 +122,20 @@ data MailchimpError = InvalidApiKey Int Text Text
                     | UserInvalidAction Int Text Text
                     | ValidationError Int Text Text
                     | ListDoesNotExist Int Text Text
-                    | ListAlreadySubscribed Int Text Text -- Undocumented Error
+                    | ListAlreadySubscribed Int Text Text
+                    | ListInvalidMergeField Int Text Text
+                    | ListNotSubscribed Int Text Text
+                    | ListInvalidInterestGroup Int Text Text
                     | InvalidDateTime Int Text Text
                     | InvalidPagingLimit Int Text Text
                     | InvalidPagingStart Int Text Text
+                    | InvalidOptions Int Text Text
+                    | InvalidSendType Int Text Text                    
+                    | InvalidEmail Int Text Text
+                    | InvalidURL Int Text Text
+                    | CampaignDoesNotExist Int Text Text
+                    | EmailNotExists Int Text Text
+
                     | OtherMailchimpError Int Text Text
   deriving (Typeable, Show)
 
@@ -140,9 +160,18 @@ instance FromJSON MailchimpError where
         "ValidationError" -> ValidationError 
         "List_DoesNotExist" -> ListDoesNotExist 
         "List_AlreadySubscribed" -> ListAlreadySubscribed
+        "List_InvalidMergeField" -> ListInvalidMergeField        
+        "List_NotSubscribed" -> ListNotSubscribed
+        "List_InvalidInterestGroup" -> ListInvalidInterestGroup
         "Invalid_DateTime" -> InvalidDateTime
         "Invalid_PagingLimit" -> InvalidPagingLimit
         "Invalid_PagingStart" -> InvalidPagingStart
+        "Invalid_Options" -> InvalidOptions
+        "Invalid_SendType" -> InvalidSendType
+        "Invalid_Email" -> InvalidEmail
+        "Invalid_URL" -> InvalidURL
+        "Campaign_DoesNotExist" -> CampaignDoesNotExist
+        "Email_NotExists" -> EmailNotExists
         _ -> OtherMailchimpError 
   parseJSON _ = mzero
 
@@ -164,3 +193,13 @@ instance FromJSON MCTime where
   parseJSON (String s) = maybe mzero (return . MCTime) $ parseTime defaultTimeLocale mcFormatString (unpack s)
   parseJSON _ = mzero
 
+convertName :: Int -> String -> String
+convertName prefixLength pname = 
+  (toLower (head name) : tail name)
+ where
+  name = drop prefixLength pname
+  -- | Converts camelcase identifiers to underscored identifiers
+  camelToUnderscore (x : y : xs) | isAlpha x, isUpper y = 
+    x : '_' : camelToUnderscore (toLower y : xs)
+  camelToUnderscore (x : xs) = x : camelToUnderscore xs
+  camelToUnderscore x = x
