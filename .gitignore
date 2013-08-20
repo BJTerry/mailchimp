@@ -1,2 +1,6 @@
 *.swp
 dist/
+.DS_Store
+.shelly
+vendor/
+cabal-dev/
