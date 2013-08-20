@@ -54,6 +54,7 @@ test-suite hunit
   ghc-options: -threaded -Wall
   hs-source-dirs: test
   extensions: OverloadedStrings
+              BangPatterns
 
   if !flag(test-hunit)
     buildable: False
@@ -66,4 +67,9 @@ test-suite hunit
                  ,       aeson    >= 0.6   && < 0.7
                  ,       text     >= 0.11  && < 1
                  ,       unordered-containers >= 0.2
+                 ,       old-locale >= 1.0
+                 ,       time >= 1.4
+                 ,       transformers >= 0.3
+                 ,       data-default >= 0.5
+
 

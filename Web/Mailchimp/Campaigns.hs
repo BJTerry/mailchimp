@@ -25,6 +25,7 @@ data CampaignTracking = CampaignTracking
   , ctTextClicks :: Bool
   , ctOpens :: Bool
   }
+  deriving (Show, Eq)
 
 $(deriveFromJSON (convertName 2) ''CampaignTracking)
 
@@ -64,5 +65,6 @@ data CampaignInfo = CampaignInfo
   , ciCommentsUnread :: Int
   , ciSummary :: Value -- TODO: Needs type
   }
+  deriving (Show, Eq)
 
 $(deriveFromJSON (convertName 2) ''CampaignInfo)

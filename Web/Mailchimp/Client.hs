@@ -54,14 +54,14 @@ runMailchimp :: (MonadIO m) => (MailchimpConfig -> MailchimpT (LoggingT IO) a ->
 runMailchimp config action =
   liftIO $ runStderrLoggingT $ flip runReaderT config action
 
--- | Represents a mailchimp api key, which implicitly includes a datacenter.
+-- | Represents a mailchimp API key, which implicitly includes a datacenter.
 data MailchimpApiKey = MailchimpApiKey
   { makApiKey :: Text -- Full API key including datacenter
-  , makDatacenter :: Text -- 2-letter datacenter code
+  , makDatacenter :: Text -- 3-letter datacenter code
   }
   deriving (Show, Eq)
 
--- | Create a mailchimp key from Text
+-- | Create a MailchimpApiKey from Text
 mailchimpKey :: Text -> Maybe MailchimpApiKey
 mailchimpKey apiKey = 
   case parse parseKey "(unknown)" apiKey of
@@ -183,6 +183,7 @@ filterObject list =
   notNothing _ = True
 
 newtype MCTime = MCTime {unMCTime :: UTCTime}
+  deriving (Show, Eq)
 
 mcFormatString :: String
 mcFormatString = "%F %T"
@@ -195,7 +196,7 @@ instance FromJSON MCTime where
 
 convertName :: Int -> String -> String
 convertName prefixLength pname = 
-  (toLower (head name) : tail name)
+  (toLower (head name) : (camelToUnderscore $ tail name))
  where
   name = drop prefixLength pname
   -- | Converts camelcase identifiers to underscored identifiers
