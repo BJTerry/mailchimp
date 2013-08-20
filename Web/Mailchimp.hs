@@ -11,7 +11,7 @@
 -- >     runMailchimp cfg $ do
 -- >       subscribeUser <listId> <userEmail> [] EmailTypeHTML Nothing Nothing Nothing
 -- 
--- If you are in a monad that implements MonadIO, MonadLogger and MonadBase IO (such as a Yesod Handler), you can alse use runMailchimpT in the same way.
+-- If you are in a monad that implements MonadIO, MonadLogger and MonadBaseControl IO (such as a Yesod Handler), you can alse use runMailchimpT in the same way.
 
 module Web.Mailchimp
   (
@@ -57,7 +57,6 @@ import Network.HTTP.Types (methodPost)
 import Network.HTTP.Types.Header (ResponseHeaders)
 import Control.Monad.Reader (ReaderT, MonadReader, runReaderT, ask)
 import Control.Monad.Logger (logDebug, LoggingT, runStderrLoggingT, MonadLogger, NoLoggingT(..))
-import Control.Monad.Base (MonadBase)
 import Control.Monad.Trans.Control (MonadBaseControl)
 
 -- | Represents the configuration for MailchimpT.
