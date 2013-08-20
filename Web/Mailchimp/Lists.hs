@@ -109,17 +109,14 @@ import Web.Mailchimp
 import Web.Mailchimp.Campaigns (CampaignId, CampaignInfo(..) )
 import Web.Mailchimp.Util
 
-import Data.Text (Text, pack, unpack)
+import Data.Text (Text)
 import Data.Aeson (Value(..), object, (.=), ToJSON(..), FromJSON(..), (.:), (.:?), Value(..))
 import Data.Aeson.Types (Pair)
 import Data.Aeson.TH (deriveFromJSON, deriveToJSON)
 import Control.Monad (mzero)
 import Data.Time.Clock (UTCTime)
-import Control.Applicative ((<*>), (<$>))
-import Control.Monad.IO.Class (liftIO)
 import Data.Maybe (catMaybes)
 import Data.Default (Default(..))
-import Data.Maybe (fromMaybe, isJust)
 import Text.Read (readMaybe)
 import Data.HashMap.Strict (lookup)
 
@@ -500,11 +497,9 @@ instance FromJSON GrowthHistoryResult where
                                  }
    where
     numberOrString k = case Data.HashMap.Strict.lookup k v of
-                         Just (String s) -> fmap readMaybe $ v .: k
-                         Just (Number n) -> v .:? k
+                         Just (String _) -> fmap readMaybe $ v .: k
+                         Just (Number _) -> v .:? k
                          _ -> return Nothing
-    firstJust :: Maybe Int -> Maybe Text -> Maybe Int
-    firstJust a b = if isJust a then a else unpack `fmap` b >>= readMaybe
   parseJSON _ = mzero
 
 
@@ -953,6 +948,7 @@ instance FromJSON ActivityAction where
     aa_campaign_id <- v .: "campaign_id"
     aa_campaign_data <- v .:? "campaign_data"
     return $ ActivityAction aa_action aa_timestamp aa_url aa_type aa_campaign_id aa_campaign_data
+  parseJSON _ = mzero
 
 -- $(deriveFromJSON (convertName 2) ''ActivityAction)
 

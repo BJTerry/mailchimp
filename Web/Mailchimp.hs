@@ -47,7 +47,7 @@ import Data.Default (def)
 import Data.ByteString.Lazy (fromStrict)
 import Data.Text (Text, pack, concat, unpack)
 import Data.Typeable (Typeable)
-import Data.Aeson (ToJSON(..), FromJSON(..), (.:), Value(..), decode, object, (.=))
+import Data.Aeson (FromJSON(..), (.:), Value(..), decode, (.=))
 import Data.Aeson.Types (Pair)
 import Data.Aeson.Encode (encode)
 import Data.Conduit (runResourceT, ResourceT)
@@ -55,7 +55,7 @@ import Network.HTTP.Conduit (parseUrl, newManager, httpLbs, RequestBody(..), Res
 import Network.HTTP.Types (methodPost)
 import Network.HTTP.Types.Header (ResponseHeaders)
 import Control.Monad.Reader (ReaderT, MonadReader, runReaderT, ask)
-import Control.Monad.Logger (logDebug, LoggingT, runStderrLoggingT, MonadLogger, runNoLoggingT)
+import Control.Monad.Logger (logDebug, LoggingT, runStderrLoggingT, MonadLogger, NoLoggingT(..))
 import Control.Monad.Base (MonadBase)
 
 -- | Represents the configuration for MailchimpT.
@@ -83,7 +83,7 @@ runMailchimpT config action =
   flip runReaderT config action
 
 -- | Runs Mailchimp in IO, ignoring the existing monadic context and without logging.
-runMailchimp :: (MonadIO m) => (MailchimpConfig -> MailchimpT (LoggingT IO) a -> m a)
+runMailchimp :: (MonadIO m) => (MailchimpConfig -> MailchimpT (NoLoggingT IO) a -> m a)
 runMailchimp config action =
   liftIO $ runNoLoggingT $ flip runReaderT config action
 

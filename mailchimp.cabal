@@ -19,6 +19,7 @@ flag test-hunit
   manual: True
 
 library
+  ghc-options: -Wall
   exposed-modules:    Web.Mailchimp
                       Web.Mailchimp.Lists
                       Web.Mailchimp.Campaigns
