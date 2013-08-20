@@ -7,7 +7,7 @@
 -- > let key = mailchimpKey "00000000000000000000000000000000-us1"
 -- > case key of
 -- >   Just k -> do
--- >     cfg <- defaultmailchimpconfig k
+-- >     cfg <- defaultMailchimpConfig k
 -- >     runMailchimp cfg $ do
 -- >       subscribeUser <listId> <userEmail> [] EmailTypeHTML Nothing Nothing Nothing
 -- 
@@ -55,7 +55,7 @@ import Network.HTTP.Conduit (parseUrl, newManager, httpLbs, RequestBody(..), Res
 import Network.HTTP.Types (methodPost)
 import Network.HTTP.Types.Header (ResponseHeaders)
 import Control.Monad.Reader (ReaderT, MonadReader, runReaderT, ask)
-import Control.Monad.Logger (logDebug, LoggingT, runStderrLoggingT, MonadLogger)
+import Control.Monad.Logger (logDebug, LoggingT, runStderrLoggingT, MonadLogger, runNoLoggingT)
 import Control.Monad.Base (MonadBase)
 
 -- | Represents the configuration for MailchimpT.
@@ -82,9 +82,14 @@ runMailchimpT :: (MonadIO m, MonadLogger m, MonadBase IO m) => MailchimpConfig -
 runMailchimpT config action = 
   flip runReaderT config action
 
--- | Runs Mailchimp in IO, ignoring the existing monadic context and logging to stderr.
+-- | Runs Mailchimp in IO, ignoring the existing monadic context and without logging.
 runMailchimp :: (MonadIO m) => (MailchimpConfig -> MailchimpT (LoggingT IO) a -> m a)
 runMailchimp config action =
+  liftIO $ runNoLoggingT $ flip runReaderT config action
+
+-- | Runs Mailchimp in IO, ignoring the existing monadic context and logging to stderr.
+runMailchimpLogging :: (MonadIO m) => (MailchimpConfig -> MailchimpT (LoggingT IO) a -> m a)
+runMailchimpLogging config action =
   liftIO $ runStderrLoggingT $ flip runReaderT config action
 
 -- | Represents a mailchimp API key, which implicitly includes a datacenter.
