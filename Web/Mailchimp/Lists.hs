@@ -16,7 +16,7 @@ import Data.Maybe (catMaybes)
 import Data.Default (Default(..))
 import Data.Maybe (fromMaybe, isJust)
 import Text.Read (readMaybe)
-
+import Data.HashMap.Strict (lookup)
 
 -- | Represents an individual mailing list
 newtype ListId = ListId {unListId :: Text}
@@ -127,7 +127,15 @@ data AbuseReport = AbuseReport
   }
   deriving (Show, Eq)
  
-$(deriveFromJSON (convertName 2) ''AbuseReport)
+instance FromJSON AbuseReport where
+  parseJSON (Object v) = do
+    ar_date <- v .: "date"
+    ar_email <- v .: "email"
+    ar_campaign_id <- v .: "campaign_id"
+    ar_type <- v .: "type"
+    return $ AbuseReport ar_date ar_email ar_campaign_id ar_type
+  parseJSON _ = mzero
+-- $(deriveFromJSON (convertName 2) ''AbuseReport)
 
 
 -- | Aggregate abuse results returnd by abuseReports
@@ -137,7 +145,14 @@ data AbuseResults = AbuseResults
   }
   deriving (Show, Eq)
 
-$(deriveFromJSON (convertName 2) ''AbuseResults)
+instance FromJSON AbuseResults where
+  parseJSON (Object v) = do
+    ar_total <- v .: "total"
+    ar_data <- v .: "data"
+    return $ AbuseResults ar_total ar_data
+  parseJSON _ = mzero
+
+-- $(deriveFromJSON (convertName 2) ''AbuseResults)
 
 -- | Queries Mailchimp for the abuse reports for a given mailing list
 --   See <http://apidocs.mailchimp.com/api/2.0/lists/abuse-reports.php> for details.
@@ -261,29 +276,50 @@ data ClientItem = ClientItem
   }
   deriving (Show, Eq)
 
-$(deriveFromJSON (convertName 2) ''ClientItem)
+instance FromJSON ClientItem where
+  parseJSON (Object v) = do
+    ci_client <- v .: "client"
+    ci_percent <- v .: "percent"
+    ci_members <- v .: "members"
+    return $ ClientItem ci_client ci_percent ci_members
+  parseJSON _ = mzero
+
+-- $(deriveFromJSON (convertName 2) ''ClientItem)
 
 
 data ClientResultsCategory = ClientResultsCategory
   { crPenetration :: Double
   , crClients :: [ClientItem]
   }
+  deriving (Show, Eq)
 
-$(deriveFromJSON (convertName 2) ''ClientResultsCategory)
+instance FromJSON ClientResultsCategory where
+  parseJSON (Object v) = do
+    cr_penetration <- v .: "penetration"
+    cr_clients <- v .: "clients"
+    return $ ClientResultsCategory cr_penetration cr_clients
+  parseJSON _ = mzero
+
+-- $(deriveFromJSON (convertName 2) ''ClientResultsCategory)
 
 
 data ClientResults = ClientResults
   { crDesktop :: Maybe ClientResultsCategory
   , crMobile :: Maybe ClientResultsCategory
   }
+  deriving (Show, Eq)
 
 instance FromJSON ClientResults where
   parseJSON (Object v) = do
-    cr_desktop <- v .:? "desktop"
-    cr_mobile <- v .:? "mobile"
+    cr_desktop <- resultsOrArray "desktop"
+    cr_mobile <- resultsOrArray "mobile"
+    -- Returns empty lists if there are no clients
     return $ ClientResults cr_desktop cr_mobile
+   where
+    resultsOrArray k = case Data.HashMap.Strict.lookup k v of
+                         Just (Object _) -> v .:? k
+                         _ -> return Nothing
   parseJSON _ = mzero
-
 
 -- $(deriveFromJSON (convertName 2) ''ClientResults)
 
@@ -305,23 +341,29 @@ data GrowthHistoryResult = GrowthHistoryResult
 
 instance FromJSON GrowthHistoryResult where
   parseJSON (Object v) = do
-    ghr_month <- v .: "month"
-    ghr_existing <- v .:? "existing"
-    ghr_imports <- v .:? "imports"
-    ghr_optins <- v .:? "optins"
-    ghr_existing2 <- v .:? "existing"
-    ghr_imports2 <- v .:? "imports"
-    ghr_optins2 <- v .:? "optins" 
-
+    ghr_month <- v .: "month" 
+    ghr_existing <- numberOrString "existing"
+    ghr_imports <- numberOrString "imports"
+    ghr_optins <- numberOrString "optins"
     return $ GrowthHistoryResult { ghrMonth = ghr_month 
-                                 , ghrExisting = firstJust ghr_existing ghr_existing2
-                                 , ghrImports = firstJust ghr_imports ghr_imports2
-                                 , ghrOptins = firstJust ghr_optins ghr_optins2
+                                 , ghrExisting = ghr_existing 
+                                 , ghrImports = ghr_imports
+                                 , ghrOptins = ghr_optins
                                  }
    where
-    firstJust :: Maybe Int -> Maybe Text -> Maybe Int
-    firstJust a b = if isJust a then a else unpack `fmap` b >>= readMaybe
+    numberOrString k = case Data.HashMap.Strict.lookup k v of
+                         Just (String s) -> fmap readMaybe $ v .: k
+                         Just (Number n) -> v .:? k
+                         _ -> return Nothing
 
+--   where
+--    firstJust :: Maybe Int -> Maybe Text -> Maybe Int
+--    firstJust a b = if isJust a then a else unpack `fmap` b >>= readMaybe
+  parseJSON _ = mzero
+
+firstJust :: Maybe Int -> Maybe Text -> Maybe Int
+firstJust a b = if isJust a then a else unpack `fmap` b >>= readMaybe
+$(deriveToJSON (convertName 3) ''GrowthHistoryResult)
 -- $(deriveFromJSON (convertName 3) ''GrowthHistoryResult)
 
 -- | Gets the growth history by month for an account or list.
@@ -339,7 +381,13 @@ data CompleteResult = CompleteResult
   }
   deriving (Show, Eq)
 
-$(deriveFromJSON (convertName 2) ''CompleteResult)
+instance FromJSON CompleteResult where
+  parseJSON (Object v) = do
+    cr_complete <- v .: "complete"
+    return $ CompleteResult cr_complete
+  parseJSON _ = mzero
+
+-- $(deriveFromJSON (convertName 2) ''CompleteResult)
 
 -- | Adds an interest group to a list.
 --   See <http://apidocs.mailchimp.com/api/2.0/lists/interest-group-add.php>
@@ -392,7 +440,13 @@ data InterestGroupingAddResult = InterestGroupingAddResult
   }
   deriving (Show, Eq)
 
-$(deriveFromJSON (convertName 4) ''InterestGroupingAddResult)
+instance FromJSON InterestGroupingAddResult where
+  parseJSON (Object v) = do
+    igar_id <- v .: "id"
+    return $ InterestGroupingAddResult igar_id
+  parseJSON _ = mzero
+
+-- $(deriveFromJSON (convertName 4) ''InterestGroupingAddResult)
 
 -- | Creates a new Interest Grouping
 --   See <http://apidocs.mailchimp.com/api/2.0/lists/interest-grouping-add.php>
@@ -430,7 +484,16 @@ data InterestGroupDetail = InterestGroupDetail
   }
   deriving (Show, Eq)
 
-$(deriveFromJSON (convertName 3) ''InterestGroupDetail)
+instance FromJSON InterestGroupDetail where
+  parseJSON (Object v) = do
+    igd_bit <- v .: "bit"
+    igd_name <- v .: "name"
+    igd_display_order <- v .: "display_order"
+    igd_subscribers <- v .: "subscribers"
+    return $ InterestGroupDetail igd_bit igd_name igd_display_order igd_subscribers
+  parseJSON _ = mzero
+
+-- $(deriveFromJSON (convertName 3) ''InterestGroupDetail)
 
 data InterestGrouping = InterestGrouping
   { igId :: GroupingId
@@ -440,7 +503,16 @@ data InterestGrouping = InterestGrouping
   }
   deriving (Show, Eq)
 
-$(deriveFromJSON (convertName 2) ''InterestGrouping)
+instance FromJSON InterestGrouping where
+  parseJSON (Object v) = do
+    ig_id <- v .: "id"
+    ig_name <- v .: "name"
+    ig_form_field <- v .: "form_field"
+    ig_groups <- v .: "groups"
+    return $ InterestGrouping ig_id ig_name ig_form_field ig_groups
+  parseJSON _ = mzero
+
+-- $(deriveFromJSON (convertName 2) ''InterestGrouping)
 
 -- | Lists the Interest Groupings for a list.
 --   See <http://apidocs.mailchimp.com/api/2.0/lists/interest-groupings.php>
@@ -469,7 +541,28 @@ data ListStats = ListStats
   }
   deriving (Show, Eq)
 
-$(deriveFromJSON (convertName 2) ''ListStats)
+instance FromJSON ListStats where
+  parseJSON (Object v) = do
+    ls_member_count <- v .: "member_count"
+    ls_unsubscribe_count <- v .: "unsubscribe_count"
+    ls_cleaned_count <- v .: "cleaned_count"
+    ls_member_count_since_send <- v .: "member_count_since_send"
+    ls_unsubscribe_count_since_send <- v .: "unsubscribe_count_since_send"
+    ls_cleaned_count_since_send <- v .: "cleaned_count_since_send"
+    ls_campaign_count <- v .: "campaign_count"
+    ls_grouping_count <- v .: "grouping_count"
+    ls_group_count <- v .: "group_count"
+    ls_merge_var_count <- v .: "merge_var_count"
+    ls_avg_sub_rate <- v .: "avg_sub_rate"
+    ls_avg_unsub_rate <- v .: "avg_unsub_rate"
+    ls_target_sub_rate <- v .: "target_sub_rate"
+    ls_open_rate <- v .: "open_rate"
+    ls_click_rate <- v .: "click_rate"
+    return $ ListStats ls_member_count ls_unsubscribe_count ls_cleaned_count ls_member_count_since_send ls_unsubscribe_count_since_send ls_cleaned_count_since_send ls_campaign_count ls_grouping_count ls_group_count ls_merge_var_count ls_avg_sub_rate ls_avg_unsub_rate ls_target_sub_rate ls_open_rate ls_click_rate
+  parseJSON _ = mzero
+
+
+-- $(deriveFromJSON (convertName 2) ''ListStats)
 $(deriveToJSON (convertName 2) ''ListStats)
 
 data ListInfo = ListInfo
@@ -491,8 +584,29 @@ data ListInfo = ListInfo
   , liModules :: [Text]
   }
   deriving (Show, Eq)
+  
+instance FromJSON ListInfo where
+  parseJSON (Object v) = do
+    li_id <- v .: "id"
+    li_web_id <- v .: "web_id"
+    li_name <- v .: "name"
+    li_date_created <- v .: "date_created"
+    li_email_type_option <- v .: "email_type_option"
+    li_use_awesomebar <- v .: "use_awesomebar"
+    li_default_from_name <- v .: "default_from_name"
+    li_default_from_email <- v .: "default_from_email"
+    li_default_subject <- v .: "default_subject"
+    li_default_language <- v .: "default_language"
+    li_list_rating <- v .: "list_rating"
+    li_subscribe_url_short <- v .: "subscribe_url_short"
+    li_beamer_address <- v .: "beamer_address"
+    li_visibility <- v .: "visibility"
+    li_stats <- v .: "stats"
+    li_modules <- v .: "modules"
+    return $ ListInfo li_id li_web_id li_name li_date_created li_email_type_option li_use_awesomebar li_default_from_name li_default_from_email li_default_subject li_default_language li_list_rating li_subscribe_url_short li_beamer_address li_visibility li_stats li_modules
+  parseJSON _ = mzero
 
-$(deriveFromJSON (convertName 2) ''ListInfo)
+-- $(deriveFromJSON (convertName 2) ''ListInfo)
 
 data ListResultError = ListResultError 
   { lreParam :: Text
@@ -501,7 +615,15 @@ data ListResultError = ListResultError
   }
   deriving (Show, Eq)
 
-$(deriveFromJSON (convertName 2) ''ListResultError)
+instance FromJSON ListResultError where
+  parseJSON (Object v) = do
+    lre_param <- v .: "param"
+    lre_code <- v .: "code"
+    lre_error <- v .: "error"
+    return $ ListResultError lre_param lre_code lre_error
+  parseJSON _ = mzero
+
+-- $(deriveFromJSON (convertName 2) ''ListResultError)
 
 
 data ListsResult = ListsResult
@@ -511,7 +633,15 @@ data ListsResult = ListsResult
   }
   deriving (Show, Eq)
 
-$(deriveFromJSON (convertName 2) ''ListsResult)
+instance FromJSON ListsResult where
+  parseJSON (Object v) = do
+    lr_total <- v .: "total"
+    lr_data <- v .: "data"
+    lr_errors <- v .: "errors"
+    return $ ListsResult lr_total lr_data lr_errors
+  parseJSON _ = mzero
+
+-- $(deriveFromJSON (convertName 2) ''ListsResult)
 
 data ListFilters = ListFilters
   { lfListId :: Maybe ListId
@@ -580,11 +710,20 @@ data ListLocationsResult = ListLocationsResult
   }
   deriving (Show, Eq)
 
-$(deriveFromJSON (convertName 3) ''ListLocationsResult)
+instance FromJSON ListLocationsResult where
+  parseJSON (Object v) = do
+    llr_country <- v .: "country"
+    llr_cc <- v .: "cc"
+    llr_percent <- v .: "percent"
+    llr_total <- v .: "total"
+    return $ ListLocationsResult llr_country llr_cc llr_percent llr_total
+  parseJSON _ = mzero
+
+-- $(deriveFromJSON (convertName 3) ''ListLocationsResult)
 
 -- | Get the locations for the subscribers of a list
 --   See <http://apidocs.mailchimp.com/api/2.0/lists/locations.php>
-listLocations :: ListId -> MailchimpT m ListLocationsResult
+listLocations :: ListId -> MailchimpT m [ListLocationsResult]
 listLocations listId =
   query "lists" "locations" [ "id" .= listId ]
 
@@ -616,7 +755,14 @@ data ActivityRecord = ActivityRecord
   }
   deriving (Show, Eq)
 
-$(deriveFromJSON (convertName 4) ''ActivityRecord)
+instance FromJSON ActivityRecord where
+  parseJSON (Object v) = do
+    arec_email <- v .: "email"
+    arec_activity <- v .: "activity"
+    return $ ActivityRecord arec_activity arec_email
+  parseJSON _ = mzero
+
+-- $(deriveFromJSON (convertName 4) ''ActivityRecord)
 
 data MemberActivityResult = MemberActivityResult
   { marSuccessCount :: Int
@@ -626,8 +772,16 @@ data MemberActivityResult = MemberActivityResult
   }
   deriving (Show, Eq)
 
+instance FromJSON MemberActivityResult where
+  parseJSON (Object v) = do
+    mar_success_count <- v .: "success_count"
+    mar_error_count <- v .: "error_count"
+    mar_errors <- v .: "errors"
+    mar_data <- v .: "data"
+    return $ MemberActivityResult mar_success_count mar_error_count mar_errors mar_data
+  parseJSON _ = mzero
 
-$(deriveFromJSON (convertName 3) ''MemberActivityResult)
+-- $(deriveFromJSON (convertName 3) ''MemberActivityResult)
 
 -- | Get the activity of a list of members for a list
 --   See <http://apidocs.mailchimp.com/api/2.0/lists/member-activity.php>
@@ -640,8 +794,15 @@ data MemberList = MemberList
   , mlStatus :: Text
   }
   deriving (Show, Eq)
+
+instance FromJSON MemberList where
+  parseJSON (Object v) = do
+    ml_id <- v .: "id"
+    ml_status <- v .: "status"
+    return $ MemberList ml_id ml_status
+  parseJSON _ = mzero
   
-$(deriveFromJSON (convertName 2) ''MemberList)
+-- $(deriveFromJSON (convertName 2) ''MemberList)
 
 data MemberGeo = MemberGeo
   { mgLatitude :: Text
@@ -654,7 +815,19 @@ data MemberGeo = MemberGeo
   }
   deriving (Show, Eq)
 
-$(deriveFromJSON (convertName 2) ''MemberGeo)
+instance FromJSON MemberGeo where
+  parseJSON (Object v) = do
+    mg_latitude <- v .: "latitude"
+    mg_longitude <- v .: "longitude"
+    mg_gmtoff <- v .: "gmtoff"
+    mg_dstoff <- v .: "dstoff"
+    mg_timezone <- v .: "timezone"
+    mg_cc <- v .: "cc"
+    mg_region <- v .: "region"
+    return $ MemberGeo mg_latitude mg_longitude mg_gmtoff mg_dstoff mg_timezone mg_cc mg_region
+  parseJSON _ = mzero
+
+-- $(deriveFromJSON (convertName 2) ''MemberGeo)
 
 data MemberClient = MemberClient
   { mcName :: Text
@@ -662,7 +835,14 @@ data MemberClient = MemberClient
   }
   deriving (Show, Eq)
 
-$(deriveFromJSON (convertName 2) ''MemberClient)
+instance FromJSON MemberClient where
+  parseJSON (Object v) = do
+    mc_name <- v .: "name"
+    mc_icon_url <- v .: "icon_url"
+    return $ MemberClient mc_name mc_icon_url
+  parseJSON _ = mzero
+
+-- $(deriveFromJSON (convertName 2) ''MemberClient)
 
 data MemberStaticSegment = MemberStaticSegment
   { mssId :: Int
@@ -671,7 +851,15 @@ data MemberStaticSegment = MemberStaticSegment
   }
   deriving (Show, Eq)
 
-$(deriveFromJSON (convertName 2) ''MemberStaticSegment)
+instance FromJSON MemberStaticSegment where
+  parseJSON (Object v) = do
+    mss_id <- v .: "id"
+    mss_name <- v .: "name"
+    mss_added <- v .: "added"
+    return $ MemberStaticSegment mss_id mss_name mss_added
+  parseJSON _ = mzero
+
+-- $(deriveFromJSON (convertName 2) ''MemberStaticSegment)
 
 data MemberNote = MemberNote
   { mnId :: Int
@@ -682,7 +870,17 @@ data MemberNote = MemberNote
   }
   deriving (Show, Eq)
   
-$(deriveFromJSON (convertName 2) ''MemberNote)
+instance FromJSON MemberNote where
+  parseJSON (Object v) = do
+    mn_id <- v .: "id"
+    mn_note <- v .: "note"
+    mn_created <- v .: "created"
+    mn_updated <- v .: "updated"
+    mn_created_by_name <- v .: "created_by_name"
+    return $ MemberNote mn_id mn_note mn_created mn_updated mn_created_by_name
+  parseJSON _ = mzero
+
+-- $(deriveFromJSON (convertName 2) ''MemberNote)
 
 
 data MemberInfoFields = MemberInfoFields
@@ -710,7 +908,33 @@ data MemberInfoFields = MemberInfoFields
   }
   deriving (Show, Eq)
 
-$(deriveFromJSON (convertName 2) ''MemberInfoFields)
+instance FromJSON MemberInfoFields where
+  parseJSON (Object v) = do
+    mi_email_type <- v .: "email_type"
+    mi_merges <- v .: "merges"
+    mi_status <- v .: "status"
+    mi_ip_signup <- v .: "ip_signup"
+    mi_timestamp_signup <- v .: "timestamp_signup"
+    mi_ip_opt <- v .: "ip_opt"
+    mi_timestamp_opt <- v .: "timestamp_opt"
+    mi_member_rating <- v .: "member_rating"
+    mi_campaign_id <- v .: "campaign_id"
+    mi_lists <- v .: "lists"
+    mi_timestamp <- v .: "timestamp"
+    mi_info_changed <- v .: "info_changed"
+    mi_web_id <- v .: "web_id"
+    mi_list_id <- v .: "list_id"
+    mi_list_name <- v .: "list_name"
+    mi_language <- v .: "language"
+    mi_is_gmonkey <- v .: "is_gmonkey"
+    mi_geo <- v .: "geo"
+    mi_clients <- v .: "clients"
+    mi_static_segments <- v .: "static_segments"
+    mi_notes <- v .: "notes"
+    return $ MemberInfoFields mi_email_type mi_merges mi_status mi_ip_signup mi_timestamp_signup mi_ip_opt mi_timestamp_opt mi_member_rating mi_campaign_id mi_lists mi_timestamp mi_info_changed mi_web_id mi_list_id mi_list_name mi_language mi_is_gmonkey mi_geo mi_clients mi_static_segments mi_notes
+  parseJSON _ = mzero
+
+-- $(deriveFromJSON (convertName 2) ''MemberInfoFields)
 
 -- | MemberInfo holds the results from calling "members". It doesn't match the layout
 --   of the Mailchimp API so that the EmailResult can be pulled out as one type.
@@ -733,17 +957,33 @@ data MemberInfoError = MemberInfoError
   }
   deriving (Show, Eq)
 
-$(deriveFromJSON (convertName 3) ''MemberInfoError)
+instance FromJSON MemberInfoError where
+  parseJSON (Object v) = do
+    mie_email <- v .: "email"
+    mie_error <- v .: "error"
+    return $ MemberInfoError mie_email mie_error
+  parseJSON _ = mzero
+
+-- $(deriveFromJSON (convertName 3) ''MemberInfoError)
 
 data MemberInfoResult = MemberInfoResult
   { mirSuccessCount :: Int
   , mirErrorCount :: Int
   , mirErrors :: [MemberInfoError]
-  , mirData :: MemberInfo
+  , mirData :: [MemberInfo]
   }
   deriving (Show, Eq)
 
-$(deriveFromJSON (convertName 3) ''MemberInfoResult)
+instance FromJSON MemberInfoResult where
+  parseJSON (Object v) = do
+    mir_success_count <- v .: "success_count"
+    mir_error_count <- v .: "error_count"
+    mir_errors <- v .: "errors"
+    mir_data <- v .: "data"
+    return $ MemberInfoResult mir_success_count mir_error_count mir_errors mir_data
+  parseJSON _ = mzero
+
+-- $(deriveFromJSON (convertName 3) ''MemberInfoResult)
 
 -- | Get information for members of a list
 --   See <http://apidocs.mailchimp.com/api/2.0/lists/member-info.php>
@@ -768,7 +1008,14 @@ data MembersResult = MembersResult
   }
   deriving (Show, Eq)
 
-$(deriveFromJSON (convertName 2) ''MembersResult)
+instance FromJSON MembersResult where
+  parseJSON (Object v) = do
+    mr_total <- v .: "total"
+    mr_data <- v .: "data"
+    return $ MembersResult mr_total mr_data
+  parseJSON _ = mzero
+
+-- $(deriveFromJSON (convertName 2) ''MembersResult)
 
 
 -- | Get all the members of a list matching a query.
@@ -784,7 +1031,8 @@ members listId status start limit sortField sortDir segment =
                                                    , "segment" .= segment
                                                    ]
                           ]
-data MergeVarType = TextMergeVarType
+data MergeVarType = EmailMergeVarType
+                  | TextMergeVarType
                   | NumberMergeVarType
                   | RadioMergeVarType
                   | DropdownMergeVarType
@@ -798,6 +1046,7 @@ data MergeVarType = TextMergeVarType
   deriving (Show, Eq)
 
 instance ToJSON MergeVarType where
+  toJSON EmailMergeVarType = String "email"  
   toJSON TextMergeVarType = String "text"
   toJSON NumberMergeVarType = String "number"
   toJSON RadioMergeVarType = String "radio"
@@ -811,6 +1060,7 @@ instance ToJSON MergeVarType where
   toJSON BirthdayMergeVarType = String "birthday"
 
 instance FromJSON MergeVarType where
+  parseJSON (String "email") = return EmailMergeVarType
   parseJSON (String "text") = return TextMergeVarType
   parseJSON (String "number") = return NumberMergeVarType
   parseJSON (String "radio") = return RadioMergeVarType
@@ -822,6 +1072,7 @@ instance FromJSON MergeVarType where
   parseJSON (String "imageurl") = return ImageurlMergeVarType
   parseJSON (String "zip") = return ZipMergeVarType
   parseJSON (String "birthday") = return BirthdayMergeVarType
+  parseJSON _ = mzero
 
 
 
@@ -884,8 +1135,8 @@ data MergeVarResult = MergeVarResult
   , mvrPublic :: Bool
   , mvrShow :: Bool
   , mvrOrder :: Text
-  , mvrDefault :: Text
-  , mvrHelptext :: Text
+  , mvrDefault :: Maybe Text
+  , mvrHelptext :: Maybe Text
   , mvrSize :: Text
   , mvrTag :: Text
   , mvrChoices :: Maybe [Text]
@@ -965,7 +1216,15 @@ data MergeVarInfo = MergeVarInfo
   }
   deriving (Show, Eq)
 
-$(deriveFromJSON (convertName 3) ''MergeVarInfo)
+instance FromJSON MergeVarInfo where
+  parseJSON (Object v) = do
+    mvi_id <- v .: "id"
+    mvi_name <- v .: "name"
+    mvi_merge_vars <- v .: "merge_vars"
+    return $ MergeVarInfo mvi_id mvi_name mvi_merge_vars
+  parseJSON _ = mzero
+
+-- $(deriveFromJSON (convertName 3) ''MergeVarInfo)
 
 data MergeVarError = MergeVarError
   { mveId :: ListId
@@ -974,22 +1233,39 @@ data MergeVarError = MergeVarError
   }
   deriving (Show, Eq)
 
-$(deriveFromJSON (convertName 3) ''MergeVarError)
+instance FromJSON MergeVarError where
+  parseJSON (Object v) = do
+    mve_id <- v .: "id"
+    mve_code <- v .: "code"
+    mve_msg <- v .: "msg"
+    return $ MergeVarError mve_id mve_code mve_msg
+  parseJSON _ = mzero
 
-data ListMergeVarsResult = ListMergeVarsResult
-  { lmvrSuccessCount :: Int
-  , lmvrErrorCount :: Int
-  , lmvrData :: [MergeVarInfo]
-  , lmvrErrors :: [MergeVarError]
+-- $(deriveFromJSON (convertName 3) ''MergeVarError)
+
+data MergeVarInfoResult = MergeVarInfoResult
+  { mvirSuccessCount :: Int
+  , mvirErrorCount :: Int
+  , mvirData :: [MergeVarInfo]
+  , mvirErrors :: [MergeVarError]
   }
   deriving (Show, Eq)
 
-$(deriveFromJSON (convertName 4) ''ListMergeVarsResult)
+instance FromJSON MergeVarInfoResult where
+  parseJSON (Object v) = do
+    mvir_success_count <- v .: "success_count"
+    mvir_error_count <- v .: "error_count"
+    mvir_data <- v .: "data"
+    mvir_errors <- v .: "errors"
+    return $ MergeVarInfoResult mvir_success_count mvir_error_count mvir_data mvir_errors
+  parseJSON _ = mzero
+
+-- $(deriveFromJSON (convertName 4) ''MergeVarInfoResult)
 
 -- | Retrieve list of marge vars for a list.
 --   See <http://apidocs.mailchimp.com/api/2.0/lists/merge-vars.php>
-listMergeVars :: ListId -> MailchimpT m ListMergeVarsResult
-listMergeVars listId =
+mergeVarInfo :: [ListId] -> MailchimpT m MergeVarInfoResult
+mergeVarInfo listId =
   query "lists" "merge-vars" [ "id" .= listId ]
 
 type SegmentId = Int
@@ -999,10 +1275,16 @@ data StaticSegmentAddResult = StaticSegmentAddResult
   }
   deriving (Show, Eq)
 
-$(deriveFromJSON (convertName 4) ''StaticSegmentAddResult)
+instance FromJSON StaticSegmentAddResult where
+  parseJSON (Object v) = do
+    ssar_id <- v .: "id"
+    return $ StaticSegmentAddResult ssar_id
+  parseJSON _ = mzero
+
+-- $(deriveFromJSON (convertName 4) ''StaticSegmentAddResult)
 
 -- | Add a static segment for later use.
---   See <ListMergeVarsResult>
+--   See <http://apidocs.mailchimp.com/api/2.0/lists/static-segment-add.php>
 staticSegmentAdd :: ListId -> Text -> MailchimpT m SegmentId
 staticSegmentAdd listId name =
   fmap ssarId $ query "lists" "static-segment-add" [ "id" .= listId
@@ -1017,29 +1299,31 @@ staticSegmentDelete listId segmentId =
                                                        , "seg_id" .= segmentId
                                                        ]
 
-data BatchEmailItem = BatchEmailItem
-  { beiEmail :: EmailId }
-  deriving (Show, Eq)
-
-$(deriveToJSON (convertName 3) ''BatchEmailItem)
-
 data StaticSegmentMembersAddResult = StaticSegmentMembersAddResult
   { ssmarSuccessCount :: Int
-  , ssmarErrors :: UserResultError
+  , ssmarErrorCount :: Int
+  , ssmarErrors :: [UserResultError]
   }
   deriving (Show, Eq)
 
-$(deriveFromJSON (convertName 5) ''StaticSegmentMembersAddResult)
+instance FromJSON StaticSegmentMembersAddResult where
+  parseJSON (Object v) = do
+    ssmar_success_count <- v .: "success_count"
+    ssmar_error_count <- v .: "error_count"
+    ssmar_errors <- v .: "errors"
+    return $ StaticSegmentMembersAddResult ssmar_success_count ssmar_error_count ssmar_errors
+  parseJSON _ = mzero
+
+-- $(deriveFromJSON (convertName 5) ''StaticSegmentMembersAddResult)
 
 
 -- | Add list members to a static segment
 --   See <http://apidocs.mailchimp.com/api/2.0/lists/static-segment-members-add.php>
 staticSegmentMembersAdd :: ListId -> SegmentId -> [EmailId] -> MailchimpT m StaticSegmentMembersAddResult
 staticSegmentMembersAdd listId segmentId emails = do
-  let batch = map BatchEmailItem emails
   query "lists" "static-segment-members-add" [ "id" .= listId
                                              , "seg_id" .= segmentId
-                                             , "batch" .= batch
+                                             , "batch" .= emails
                                              ]
 
 -- | The Mailchimp API docs show a slight difference between the return JSON of adds and deletes.
@@ -1050,15 +1334,22 @@ data StaticSegmentMembersDelResult = StaticSegmentMembersDelResult
   }
   deriving (Show, Eq)
 
-$(deriveFromJSON (convertName 5) ''StaticSegmentMembersDelResult)
+instance FromJSON StaticSegmentMembersDelResult where
+  parseJSON (Object v) = do
+    ssmdr_success_count <- v .: "success_count"
+    ssmdr_error_count <- v .: "error_count"
+    ssmdr_errors <- v .: "errors"
+    return $ StaticSegmentMembersDelResult ssmdr_success_count ssmdr_error_count ssmdr_errors
+  parseJSON _ = mzero
+
+-- $(deriveFromJSON (convertName 5) ''StaticSegmentMembersDelResult)
 
 
 staticSegmentMembersDelete :: ListId -> SegmentId -> [EmailId] -> MailchimpT m StaticSegmentMembersDelResult
 staticSegmentMembersDelete listId segmentId emails = do
-  let batch = map BatchEmailItem emails
   query "lists" "static-segment-members-del" [ "id" .= listId
                                              , "seg_id" .= segmentId
-                                             , "batch" .= batch
+                                             , "batch" .= emails
                                              ]
 
 -- | Reset a static segment and remove all members.
@@ -1073,13 +1364,24 @@ data StaticSegmentResult = StaticSegmentResult
   { ssrId :: SegmentId
   , ssrName :: Text
   , ssrMemberCount :: Int
-  , ssrCreatedDate :: MCTime
-  , ssrLastUpdate :: MCTime
-  , ssrLastReset :: MCTime
+  , ssrCreatedDate :: Maybe MCTime
+  , ssrLastUpdate :: Maybe MCTime
+  , ssrLastReset :: Maybe MCTime
   }
   deriving (Show, Eq)
 
-$(deriveFromJSON (convertName 3) ''StaticSegmentResult)
+instance FromJSON StaticSegmentResult where
+  parseJSON (Object v) = do
+    ssr_id <- v .: "id"
+    ssr_name <- v .: "name"
+    ssr_member_count <- v .: "member_count"
+    ssr_created_date <- v .: "created_date"
+    ssr_last_update <- v .: "last_update"
+    ssr_last_reset <- v .: "last_reset"
+    return $ StaticSegmentResult ssr_id ssr_name ssr_member_count ssr_created_date ssr_last_update ssr_last_reset
+  parseJSON _ = mzero
+
+-- $(deriveFromJSON (convertName 3) ''StaticSegmentResult)
 
 -- | Get all of the static segments
 --   See <http://apidocs.mailchimp.com/api/2.0/lists/static-segments.php>
@@ -1156,14 +1458,20 @@ instance FromJSON WebhookSources where
 $(deriveToJSON (convertName 2) ''WebhookSources)
 -- $(deriveFromJSON (convertName 2) ''WebhookSources)
 
-type WebhookId = Int
+type WebhookId = Text
 
 data WebhookAddResult = WebhookAddResult
   { warId :: WebhookId
   }
   deriving (Show, Eq)
 
-$(deriveFromJSON (convertName 3) ''WebhookAddResult)
+instance FromJSON WebhookAddResult where
+  parseJSON (Object v) = do
+    war_id <- v .: "id"
+    return $ WebhookAddResult war_id
+  parseJSON _ = mzero
+
+-- $(deriveFromJSON (convertName 3) ''WebhookAddResult)
 
 -- | Add a webhook URL to a list.
 --   See <http://apidocs.mailchimp.com/api/2.0/lists/webhook-add.php>
@@ -1179,7 +1487,7 @@ webhookAdd listId url actions sources =
 --   See <http://apidocs.mailchimp.com/api/2.0/lists/webhook-del.php>
 webhookDelete :: ListId -> Text -> MailchimpT m Bool
 webhookDelete listId url =
-  query "lists" "webhook-del" [ "id" .= listId
+  fmap crComplete $ query "lists" "webhook-del" [ "id" .= listId
                               , "url" .= url
                               ]
 
@@ -1190,7 +1498,15 @@ data WebhookResult = WebhookResult
   }
   deriving (Show, Eq)
 
-$(deriveFromJSON (convertName 2) ''WebhookResult)
+instance FromJSON WebhookResult where
+  parseJSON (Object v) = do
+    wr_url <- v .: "url"
+    wr_actions <- v .: "actions"
+    wr_sources <- v .: "sources"
+    return $ WebhookResult wr_url wr_actions wr_sources
+  parseJSON _ = mzero
+
+-- $(deriveFromJSON (convertName 2) ''WebhookResult)
 
 -- | List all the webhooks for a list.
 --   See <http://apidocs.mailchimp.com/api/2.0/lists/webhooks.php>

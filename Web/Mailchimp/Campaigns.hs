@@ -1,6 +1,7 @@
 module Web.Mailchimp.Campaigns
   ( CampaignId
   , CampaignInfo (..)
+  , CampaignTracking (..)
   )
   where
 
