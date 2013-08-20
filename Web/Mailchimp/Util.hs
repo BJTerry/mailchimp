@@ -13,9 +13,8 @@ import Data.Char (isAlpha, toLower, isUpper)
 
 
 import Data.Time.Clock (UTCTime)
-import Data.Time.Format (formatTime)
+import Data.Time.Format (formatTime, parseTime)
 import System.Locale (defaultTimeLocale)
-import Data.Time.Format (parseTime)
 
 -- | Creates Aeson objects after filtering to remove null values.
 filterObject list =
@@ -41,7 +40,7 @@ instance FromJSON MCTime where
 --   For use by Aeson template haskell calls.
 convertName :: Int -> String -> String
 convertName prefixLength pname = 
-  (toLower (head name) : (camelToUnderscore $ tail name))
+  toLower (head name) : camelToUnderscore (tail name)
  where
   name = drop prefixLength pname
   -- | Converts camelcase identifiers to underscored identifiers

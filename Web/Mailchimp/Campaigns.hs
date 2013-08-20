@@ -1,8 +1,8 @@
 -- | Implements the \"campaigns\" section of the Mailchimp JSON API.
 module Web.Mailchimp.Campaigns
-  ( CampaignId
-  , CampaignInfo (..)
-  , CampaignTracking (..)
+  ( CampaignId(..)
+  , CampaignInfo(..)
+  , CampaignTracking(..)
   )
   where
 
@@ -13,7 +13,6 @@ import Data.Text (Text)
 import Data.Aeson (Value(..), object, (.=), decode, ToJSON(..), FromJSON(..), (.:), (.:?), Value(..))
 import Data.Aeson.TH (deriveFromJSON, deriveToJSON)
 import Control.Monad (mzero)
-import Control.Applicative ((<*>), (<$>))
 
 
 newtype CampaignId = CampaignId {unCampaignId :: Text}

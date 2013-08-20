@@ -57,11 +57,11 @@ tests cfg lid testAddress =
   ]
 
 --
--- Web.Mailchimp.Client
+-- Web.Mailchimp
 --
 
 ping_mailchimp cfg = do
-  Object o <- runMailchimp cfg $ query "helper" "ping" []
+  Object o <- runMailchimpLogging cfg $ query "helper" "ping" []
   Data.HashMap.Strict.lookup "msg" o @?= (Just $ String "Everything's Chimpy!")
 
 parse_key = 
@@ -81,40 +81,40 @@ convert_name =
 --
 
 lists_abuse_reports cfg lid = do
-  runMailchimp cfg $ do
+  runMailchimpLogging cfg $ do
     _ <- abuseReports lid (Just 0) (Just 100) (parseTime defaultTimeLocale "%c" "Thu Jan  1 00:00:10 UTC 1970")
     return ()
 
 lists_activity cfg lid = do
-  runMailchimp cfg $ do
+  runMailchimpLogging cfg $ do
     !_ <- listActivity lid
     return ()
 
 lists_batch_subscribe_invalid cfg lid = do
-  runMailchimp cfg $ do
+  runMailchimpLogging cfg $ do
     x <- batchSubscribe lid [(Email "Test@example.com", EmailTypeHTML, [])] (Just False) Nothing Nothing
     liftIO $ bsrErrorCount x @?= 1 -- Fails because of example.com domain
 
 lists_batch_subscribe cfg lid testAddress = do
-  runMailchimp cfg $ do
+  runMailchimpLogging cfg $ do
     x <- batchSubscribe lid [(Email testAddress, EmailTypeHTML, [])] (Just False) Nothing Nothing
     liftIO $ bsrAddCount x @?= 1 
     y <- batchUnsubscribe lid [Email testAddress] (Just True) (Just False) (Just False)
     liftIO $ burSuccessCount y @?= 1
 
 lists_clients cfg lid = do
-  runMailchimp cfg $ do
+  runMailchimpLogging cfg $ do
     !_ <- clients lid
     return ()
 
 
 lists_growth_history cfg lid = do
-  runMailchimp cfg $ do
+  runMailchimpLogging cfg $ do
     !_ <- growthHistory Nothing
     return ()
 
 lists_interest_group_add cfg lid = do
-  runMailchimp cfg $ do
+  runMailchimpLogging cfg $ do
     x <- interestGroupAdd lid "InterestGroup" Nothing
     liftIO $ x @?= True
     y <- interestGroupUpdate lid "InterestGroup" "InterestGroup2" Nothing
@@ -123,7 +123,7 @@ lists_interest_group_add cfg lid = do
     liftIO $ z @?= True
 
 lists_interest_grouping cfg lid = do
-  runMailchimp cfg $ do
+  runMailchimpLogging cfg $ do
     x <- interestGroupingAdd lid "InterestGrouping" CheckboxesGrouping ["Group1", "Group2"]
     y <- interestGroupingUpdate (x) "name" "InterestGrouping2"
     liftIO $ y @?= True
@@ -134,33 +134,33 @@ lists_interest_grouping cfg lid = do
     liftIO $ Prelude.length w @?= 1
 
 lists_list_info cfg lid = do
-  runMailchimp cfg $ do
+  runMailchimpLogging cfg $ do
     x <- listInfo (Just $ def {lfListId = Just lid}) Nothing Nothing Nothing Nothing
     liftIO $ lrTotal x @?= 1
 
 lists_list_locations cfg lid = do
-  runMailchimp cfg $ do
+  runMailchimpLogging cfg $ do
     !_ <- listLocations lid
     return ()
 
 lists_member_activity cfg lid testAddress = do
-  runMailchimp cfg $ do
+  runMailchimpLogging cfg $ do
     !_ <- memberActivity lid [Email testAddress]
     return ()
 
 
 lists_member_info cfg lid testAddress = do
-  runMailchimp cfg $ do
+  runMailchimpLogging cfg $ do
     !_ <- memberInfo lid [Email testAddress]
     return ()
 
 lists_members cfg lid testAddress = do
-  runMailchimp cfg $ do
+  runMailchimpLogging cfg $ do
     !_ <- members lid (Just UnsubscribedStatus) (Just 0) (Just 100) (Just "email") Nothing Nothing
     return ()
 
 lists_merge_vars cfg lid = do
-  runMailchimp cfg $ do
+  runMailchimpLogging cfg $ do
     x <- mergeVarAdd lid "TEST" "Test Tag" (Just $ def {mvoShow = Just True}) 
     y <- mergeVarReset lid "TEST"
     liftIO $ y @?= True
@@ -174,7 +174,7 @@ lists_merge_vars cfg lid = do
     liftIO $ v @?= True
 
 lists_static_segments cfg lid testAddress = do
-  runMailchimp cfg $ do
+  runMailchimpLogging cfg $ do
     x <- staticSegmentAdd lid "TestSegment"
     y <- staticSegmentMembersAdd lid x [Email testAddress]
     liftIO $ ssmarSuccessCount y @?= 0
@@ -186,7 +186,7 @@ lists_static_segments cfg lid testAddress = do
     liftIO $ q @?= True
 
 lists_subscribe cfg lid testAddress = do
-  runMailchimp cfg $ do
+  runMailchimpLogging cfg $ do
     x <- subscribeUser lid (Email testAddress) Nothing (Just EmailTypeHTML) (Just False) Nothing Nothing (Just False)
     liftIO $ erEmail x @?= (Email testAddress)
     y <- updateMember lid (Email testAddress) [] (Just EmailTypeText) Nothing
@@ -195,7 +195,7 @@ lists_subscribe cfg lid testAddress = do
     liftIO $ z @?= True
 
 lists_webhooks cfg lid = do
-  runMailchimp cfg $ do
+  runMailchimpLogging cfg $ do
     x <- webhookAdd lid "http://www.example.com" (Just $ def {waSubscribe = Just False}) Nothing
     y <- webhooks lid
     liftIO $ Prelude.length y @?= 1

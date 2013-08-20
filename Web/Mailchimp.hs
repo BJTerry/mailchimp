@@ -20,6 +20,7 @@ module Web.Mailchimp
     MailchimpT
   , runMailchimpT
   , runMailchimp
+  , runMailchimpLogging
   , askApiKey
   -- * Running queries
   , query
@@ -41,7 +42,7 @@ import Text.Parsec (parse, many1, hexDigit, char, alphaNum)
 import Text.Parsec.Text (GenParser)
 import Control.Exception.Base (Exception)
 import Control.Exception.Lifted (throwIO, catch)
-import Control.Monad (mzero, MonadPlus)
+import Control.Monad (mzero, MonadPlus, when)
 import Control.Monad.IO.Class (liftIO, MonadIO)
 import Data.Default (def)
 import Data.ByteString.Lazy (fromStrict)
@@ -80,17 +81,17 @@ type MailchimpT m a =  (MonadIO m, MonadLogger m, MonadBase IO m) => ReaderT Mai
 
 runMailchimpT :: (MonadIO m, MonadLogger m, MonadBase IO m) => MailchimpConfig -> MailchimpT m a -> m a
 runMailchimpT config action = 
-  flip runReaderT config action
+  runReaderT action config
 
 -- | Runs Mailchimp in IO, ignoring the existing monadic context and without logging.
 runMailchimp :: (MonadIO m) => (MailchimpConfig -> MailchimpT (NoLoggingT IO) a -> m a)
 runMailchimp config action =
-  liftIO $ runNoLoggingT $ flip runReaderT config action
+  liftIO $ runNoLoggingT $ runReaderT action config
 
 -- | Runs Mailchimp in IO, ignoring the existing monadic context and logging to stderr.
 runMailchimpLogging :: (MonadIO m) => (MailchimpConfig -> MailchimpT (LoggingT IO) a -> m a)
 runMailchimpLogging config action =
-  liftIO $ runStderrLoggingT $ flip runReaderT config action
+  liftIO $ runStderrLoggingT $ runReaderT action config
 
 -- | Represents a mailchimp API key, which implicitly includes a datacenter.
 data MailchimpApiKey = MailchimpApiKey
@@ -153,11 +154,11 @@ query' section apiMethod request = do
     Nothing -> throwIO $ OtherMailchimpError (-1) "ParseError" "Could not parse result JSON from Mailchimp"
  where
   catchHttpException :: HttpException -> ResourceT IO a
-  catchHttpException e@(StatusCodeException _ headers _) = do
-    maybe (throwIO e) id (throwIO `fmap` (decodeError headers))
+  catchHttpException e@(StatusCodeException _ headers _) = 
+    maybe (throwIO e) throwIO (decodeError headers)
   catchHttpException e = throwIO e
   decodeError :: ResponseHeaders -> Maybe MailchimpError
-  decodeError headers = fromStrict `fmap` (lookup "X-Response-Body-Start" headers) >>= decode
+  decodeError headers = fromStrict `fmap` lookup "X-Response-Body-Start" headers >>= decode
 
 data MailchimpError = InvalidApiKey Int Text Text
                     | UserDisabled Int Text Text
@@ -189,11 +190,11 @@ instance Exception MailchimpError
 instance FromJSON MailchimpError where
   parseJSON (Object v) = do
     status <- v .: "status"
-    if status /= ("error" :: Text) then mzero else return ()
+    when (status /= ("error" :: Text)) mzero
     name <- v .: "name"
     code <- v .: "code"
     message <- v .: "error" -- Documentation shows this is under the "message" key, but it is incorrect
-    return $ (errConstructor name) code name message
+    return $ errConstructor name code name message
    where
       errConstructor name = case (name :: Text) of
         "Invalid_ApiKey" -> InvalidApiKey 

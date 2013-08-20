@@ -147,7 +147,7 @@ instance FromJSON EmailId where
     email <- fmap (fmap Email) $ v .:? "email"
     euid <- fmap (fmap EmailUniqueId) $ v .:? "euid"
     leid <- fmap (fmap ListEmailId) $ v .:? "leid"
-    case (catMaybes [email, euid, leid]) of
+    case catMaybes [email, euid, leid] of
       (x:_) -> return x
       _ -> mzero
   parseJSON _ = mzero
@@ -216,7 +216,7 @@ subscribeUser listId
               doubleOptin 
               updateExisting 
               replaceInterests 
-              sendWelcome = do
+              sendWelcome = 
   query "lists" "subscribe" request 
  where
   request = [ "id" .= unListId listId
@@ -350,7 +350,7 @@ batchSubscribe :: ListId
                -> Maybe Bool
                -- ^ Replace user interests
                -> MailchimpT m BatchSubscribeResult
-batchSubscribe listId batchItems doubleOptin updateExisting replaceInterests = do
+batchSubscribe listId batchItems doubleOptin updateExisting replaceInterests =
   query "lists" "batch-subscribe" request
  where
   request = [ "id" .= listId
@@ -360,7 +360,7 @@ batchSubscribe listId batchItems doubleOptin updateExisting replaceInterests = d
             , "replace_interests" .= replaceInterests
             ]
   buildBatch :: [(EmailId, EmailType, [MergeVarsItem])] -> [Value]
-  buildBatch items = map buildBatchItem items
+  buildBatch = map buildBatchItem
   buildBatchItem (email, emailType, mergeVars) = 
     filterObject [ "email" .= email
                  , "email_type" .= emailType
@@ -405,7 +405,7 @@ batchUnsubscribe :: ListId
                  -- ^ Send notification email to list administrator
                  -> MailchimpT m BatchUnsubscribeResult
 batchUnsubscribe  listId batchItems deleteMember sendGoodbye sendNotify = 
-  query "lists" "batch-unsubscribe" $ 
+  query "lists" "batch-unsubscribe" 
     [ "id" .= listId
     , "batch" .= batchItems
     , "delete_member" .= deleteMember
@@ -490,11 +490,11 @@ instance FromJSON GrowthHistoryResult where
     ghr_existing <- numberOrString "existing"
     ghr_imports <- numberOrString "imports"
     ghr_optins <- numberOrString "optins"
-    return $ GrowthHistoryResult { ghrMonth = ghr_month 
-                                 , ghrExisting = ghr_existing 
-                                 , ghrImports = ghr_imports
-                                 , ghrOptins = ghr_optins
-                                 }
+    return GrowthHistoryResult { ghrMonth = ghr_month 
+                               , ghrExisting = ghr_existing 
+                               , ghrImports = ghr_imports
+                               , ghrOptins = ghr_optins
+                               }
    where
     numberOrString k = case Data.HashMap.Strict.lookup k v of
                          Just (String _) -> fmap readMaybe $ v .: k
@@ -625,7 +625,7 @@ interestGroupingAdd :: ListId
                     -> [Text]
                     -- ^ New groups in grouping
                     -> MailchimpT m GroupingId
-interestGroupingAdd listId name groupingType groups = do
+interestGroupingAdd listId name groupingType groups =
   fmap igarId $ query "lists" "interest-grouping-add" [ "id" .= listId
                                                       , "name" .= name
                                                       , "type" .= groupingType
@@ -654,7 +654,7 @@ interestGroupingUpdate :: GroupingId
                        -> Text
                        -- ^ New value for field
                        -> MailchimpT m Bool
-interestGroupingUpdate groupId name value = do
+interestGroupingUpdate groupId name value =
   fmap crComplete $ query "lists" "interest-grouping-update" [ "grouping_id" .= groupId
                                                              , "name" .= name
                                                              , "value" .= value
@@ -1152,7 +1152,7 @@ instance FromJSON MemberInfo where
   parseJSON (Object v) = do
     emailResult <- parseJSON (Object v)
     memberFields <- parseJSON (Object v)
-    return $ MemberInfo { miEmailResult = emailResult, miFields = memberFields }
+    return MemberInfo { miEmailResult = emailResult, miFields = memberFields }
   parseJSON _ = mzero
 
 data MemberInfoError = MemberInfoError
@@ -1581,7 +1581,7 @@ instance FromJSON StaticSegmentMembersAddResult where
 --
 --   See <http://apidocs.mailchimp.com/api/2.0/lists/static-segment-members-add.php>
 staticSegmentMembersAdd :: ListId -> SegmentId -> [EmailId] -> MailchimpT m StaticSegmentMembersAddResult
-staticSegmentMembersAdd listId segmentId emails = do
+staticSegmentMembersAdd listId segmentId emails =
   query "lists" "static-segment-members-add" [ "id" .= listId
                                              , "seg_id" .= segmentId
                                              , "batch" .= emails
@@ -1607,7 +1607,7 @@ instance FromJSON StaticSegmentMembersDelResult where
 
 
 staticSegmentMembersDelete :: ListId -> SegmentId -> [EmailId] -> MailchimpT m StaticSegmentMembersDelResult
-staticSegmentMembersDelete listId segmentId emails = do
+staticSegmentMembersDelete listId segmentId emails =
   query "lists" "static-segment-members-del" [ "id" .= listId
                                              , "seg_id" .= segmentId
                                              , "batch" .= emails
