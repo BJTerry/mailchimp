@@ -22,6 +22,7 @@ library
   exposed-modules:    Web.Mailchimp.Lists
                       Web.Mailchimp.Client 
                       Web.Mailchimp.Campaigns
+                      Web.Mailchimp.Util
   -- other-modules:       
   extensions: OverloadedStrings
               DeriveDataTypeable

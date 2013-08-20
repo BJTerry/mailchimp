@@ -1,4 +1,27 @@
-module Web.Mailchimp.Client where
+module Web.Mailchimp.Client 
+  (
+
+  -- * The MailchimpT monad
+    MailchimpT
+  , runMailchimpT
+  , runMailchimp
+  , askApiKey
+  -- * Running queries
+  , query
+  , query'
+  , apiEndpointUrl
+  -- * Configuration
+  , MailchimpConfig(..)
+  , defaultMailchimpConfig
+  , MailchimpApiKey(..)
+  , mailchimpKey
+  -- * Error handling
+  , MailchimpError
+  , 
+  )
+  where
+
+import Web.Mailchimp.Util
 
 import Text.Parsec (parse, many1, hexDigit, char, alphaNum)
 import Text.Parsec.Text (GenParser)
@@ -18,24 +41,20 @@ import Network.HTTP.Conduit (parseUrl, newManager, httpLbs, RequestBody(..), Res
 import Network.HTTP.Types (methodPost)
 import Network.HTTP.Types.Header (ResponseHeaders)
 import Control.Monad.Reader (ReaderT, MonadReader, runReaderT, ask)
-import Data.Time.Format (formatTime)
-import System.Locale (defaultTimeLocale)
-import Data.Time.Clock (UTCTime)
-import Data.Time.Format (parseTime)
 import Control.Monad.Logger (logDebug, LoggingT, runStderrLoggingT, MonadLogger)
 import Control.Monad.Base (MonadBase)
-import Data.Char (isAlpha, toLower, isUpper)
 
+-- | Represents the configuration for MailchimpT.
 data MailchimpConfig = MailchimpConfig 
   { mcApiKey :: MailchimpApiKey
   , mcManager :: Manager
   }
 
--- | Convenience method to ask ReaderT for the current API key
+-- | Convenience method to ask ReaderT for the current API key.
 askApiKey :: MailchimpT m MailchimpApiKey
 askApiKey = fmap mcApiKey ask
 
--- | Creates a MailchimpConfig with a new Manager
+-- | Creates a MailchimpConfig with a new Manager.
 defaultMailchimpConfig :: MonadIO m => MailchimpApiKey -> m MailchimpConfig
 defaultMailchimpConfig apiKey = do
   man <- liftIO $ newManager def
@@ -49,7 +68,7 @@ runMailchimpT :: (MonadIO m, MonadLogger m, MonadBase IO m) => MailchimpConfig -
 runMailchimpT config action = 
   flip runReaderT config action
 
--- | Runs Mailchimp in IO, ignoring the existing monadic context and logging to stderr
+-- | Runs Mailchimp in IO, ignoring the existing monadic context and logging to stderr.
 runMailchimp :: (MonadIO m) => (MailchimpConfig -> MailchimpT (LoggingT IO) a -> m a)
 runMailchimp config action =
   liftIO $ runStderrLoggingT $ flip runReaderT config action
@@ -79,7 +98,7 @@ parseKey = do
   dc <- many1 alphaNum
   return (key, dc)
 
--- | Builds the mailchimp endpoint URL
+-- | Builds the mailchimp endpoint URL.
 apiEndpointUrl :: Text -> Text -> Text -> Text
 apiEndpointUrl datacenter section apiMethod = 
   Data.Text.concat ["https://", datacenter, ".api.mailchimp.com/2.0/", section, "/", apiMethod, ".json"]
@@ -176,31 +195,4 @@ instance FromJSON MailchimpError where
   parseJSON _ = mzero
 
 
-filterObject list =
-  object $ filter notNothing list
- where
-  notNothing (_, Null) = False
-  notNothing _ = True
 
-newtype MCTime = MCTime {unMCTime :: UTCTime}
-  deriving (Show, Eq)
-
-mcFormatString :: String
-mcFormatString = "%F %T"
-
-instance ToJSON MCTime where
-  toJSON (MCTime t) = String $ pack $ formatTime defaultTimeLocale mcFormatString t
-instance FromJSON MCTime where
-  parseJSON (String s) = maybe mzero (return . MCTime) $ parseTime defaultTimeLocale mcFormatString (unpack s)
-  parseJSON _ = mzero
-
-convertName :: Int -> String -> String
-convertName prefixLength pname = 
-  (toLower (head name) : (camelToUnderscore $ tail name))
- where
-  name = drop prefixLength pname
-  -- | Converts camelcase identifiers to underscored identifiers
-  camelToUnderscore (x : y : xs) | isAlpha x, isUpper y = 
-    x : '_' : camelToUnderscore (toLower y : xs)
-  camelToUnderscore (x : xs) = x : camelToUnderscore xs
-  camelToUnderscore x = x

@@ -1,8 +1,110 @@
 module Web.Mailchimp.Lists
+  ( 
+  -- * Mailchimp API Methods
+    abuseReports
+  , listActivity
+  , batchSubscribe
+  , batchUnsubscribe
+  , clients
+  , growthHistory
+  , interestGroupAdd
+  , interestGroupDelete
+  , interestGroupUpdate
+  , interestGroupingAdd
+  , interestGroupingDelete
+  , interestGroupingUpdate
+  , interestGroupings
+  , listInfo
+  , listLocations
+  , memberActivity
+  , memberInfo
+  , members
+  , mergeVarAdd
+  , mergeVarDelete
+  , mergeVarReset
+  , mergeVarSet
+  , mergeVarUpdate
+  , mergeVarInfo
+  , staticSegmentAdd
+  , staticSegmentDelete
+  , staticSegmentMembersAdd
+  , staticSegmentMembersDelete
+  , staticSegmentReset
+  , staticSegments
+  , subscribeUser
+  , unsubscribe
+  , updateMember
+  , webhookAdd
+  , webhookDelete
+  , webhooks
+  -- * Parameter types
+  , ListId(..)
+  , EmailId(..)
+  , MergeVarsItem
+  , EmailType(..)
+  , AbuseReport(..)
+  , GroupingId
+  , GroupingType(..)
+  , ListFilters(..)
+  , SortField(..)
+  , SortDir(..)
+  , MemberStatus(..)
+  , MergeVarType(..)
+  , MergeVarOptions(..)
+  , SegmentId
+  , WebhookActions(..)
+  , WebhookSources(..)
+  , WebhookId
+
+  
+  -- * Result types
+  , EmailResult(..)
+  , AbuseResults(..)
+  , UserResultError(..)
+  , BatchSubscribeResult(..)
+  , BatchUnsubscribeResult(..)
+  , ClientItem(..)
+  , ClientResultsCategory(..)
+  , ClientResults(..)
+  , GrowthHistoryResult(..)
+  , CompleteResult(..)
+  , InterestGroupingAddResult(..)
+  , InterestGroupDetail(..)
+  , InterestGrouping(..)
+  , ListStats(..)
+  , ListInfo(..)
+  , ListResultError(..)
+  , ListsResult(..)
+  , ListLocationsResult(..)
+  , ActivityAction(..)
+  , ActivityRecord(..)
+  , MemberActivityResult(..)
+  , MemberList(..)
+  , MemberGeo(..)
+  , MemberClient(..)
+  , MemberStaticSegment(..)
+  , MemberNote(..)
+  , MemberInfoFields(..)
+  , MemberInfo(..)
+  , MemberInfoError(..)
+  , MemberInfoResult(..)
+  , MembersResult(..)
+  , MergeVarResult(..)
+  , MergeVarInfo(..)
+  , MergeVarError(..)
+  , MergeVarInfoResult(..)
+  , StaticSegmentAddResult(..)
+  , StaticSegmentMembersAddResult(..)
+  , StaticSegmentMembersDelResult(..)
+  , StaticSegmentResult(..)
+  , WebhookAddResult(..)
+  , WebhookResult(..)
+  )
   where
 
 import Web.Mailchimp.Client
 import Web.Mailchimp.Campaigns (CampaignId, CampaignInfo(..) )
+import Web.Mailchimp.Util
 
 import Data.Text (Text, pack, unpack)
 import Data.Aeson (Value(..), object, (.=), ToJSON(..), FromJSON(..), (.:), (.:?), Value(..))
@@ -50,7 +152,7 @@ instance FromJSON EmailId where
       _ -> mzero
   parseJSON _ = mzero
 
--- | The result of calling subscribeUser. Provides three ways of identifying the user for subsequent calls.
+-- | Provides three ways of identifying the user for subsequent calls.
 data EmailResult = EmailResult { erEmail :: EmailId
                                , erEmailUniqueId :: EmailId
                                , erListEmailId :: EmailId
@@ -83,11 +185,12 @@ instance FromJSON EmailType where
   parseJSON _ = mzero
 
 -- | Subscribes a user to the given list. 
+--
 --   See <http://apidocs.mailchimp.com/api/2.0/lists/subscribe.php> for details.
 --
 --   Example Usage:
 -- 
--- >>> subscribeUser listId emailId (Just [("FNAME", "John"), ("LNAME", "Doe")]) (Just doubleOptin) (Just updateExisting) (Just replaceInterests) (Just sendWelcome)
+-- > subscribeUser listId emailId (Just [("FNAME", "John"), ("LNAME", "Doe")]) (Just doubleOptin) (Just updateExisting) (Just replaceInterests) (Just sendWelcome)
 -- 
 subscribeUser :: ListId 
               -> EmailId 
@@ -110,7 +213,7 @@ subscribeUser listId
  where
   request = [ "id" .= unListId listId
             , "email" .= emailId
-            , "merge_vars" .= fmap object mergeVars
+            , "merge_vars" .= fmap filterObject mergeVars
             , "email_type" .= emailType
             , "double_optin" .= doubleOptin
             , "update_existing" .= updateExisting
@@ -135,6 +238,7 @@ instance FromJSON AbuseReport where
     ar_type <- v .: "type"
     return $ AbuseReport ar_date ar_email ar_campaign_id ar_type
   parseJSON _ = mzero
+
 -- $(deriveFromJSON (convertName 2) ''AbuseReport)
 
 
@@ -155,11 +259,12 @@ instance FromJSON AbuseResults where
 -- $(deriveFromJSON (convertName 2) ''AbuseResults)
 
 -- | Queries Mailchimp for the abuse reports for a given mailing list
+--
 --   See <http://apidocs.mailchimp.com/api/2.0/lists/abuse-reports.php> for details.
 --
 --   Example Usage: 
 --
--- >>> abuseReports listId (Just startingPage [indexed at 0]) (Just limitResults) (Just sinceDate)
+-- > abuseReports listId (Just startingPage [indexed at 0]) (Just limitResults) (Just sinceDate)
 abuseReports :: ListId -> Maybe Int -> Maybe Int -> Maybe UTCTime -> MailchimpT m AbuseResults
 abuseReports listId start limit since = 
   query "lists" "abuse-reports" request
@@ -171,12 +276,13 @@ abuseReports listId start limit since =
             ]
 
 -- | Provides unspecified data relating to list activity
+--
 --   See <http://apidocs.mailchimp.com/api/2.0/lists/activity.php>
 listActivity :: ListId -> MailchimpT m [Value]
 listActivity listId = 
   query "lists" "activity" [ "id" .= listId ]
 
--- | An error result from a call to batchSubscribe
+-- | An error result from batch calls, such as subscribeUser
 data UserResultError = UserResultError
   { bsreEmail :: Maybe EmailId
   , bsreCode :: Int
@@ -211,11 +317,12 @@ $(deriveFromJSON (convertName 3) ''BatchSubscribeResult)
 
 
 -- | Subscribe many users at once to a particular list.
+--
 --   See <http://apidocs.mailchimp.com/api/2.0/lists/batch-subscribe.php>
 --
 --   Usage:
 --
--- >>> batchSubscribe listId [(Email "example@example.com", EmailTypeHTML, [("FNAME", "John")]] (Just doubleOptin) (Just updateExisting) (Just replaceInterests)
+-- > batchSubscribe listId [(Email "example@example.com", EmailTypeHTML, [("FNAME", "John")]] (Just doubleOptin) (Just updateExisting) (Just replaceInterests)
 batchSubscribe :: ListId -> [(EmailId, EmailType, [MergeVarsItem])] -> Maybe Bool -> Maybe Bool -> Maybe Bool -> MailchimpT m BatchSubscribeResult
 batchSubscribe listId batchItems doubleOptin updateExisting replaceInterests = do
   query "lists" "batch-subscribe" request
@@ -231,7 +338,7 @@ batchSubscribe listId batchItems doubleOptin updateExisting replaceInterests = d
   buildBatchItem (email, emailType, mergeVars) = 
     filterObject [ "email" .= email
                  , "email_type" .= emailType
-                 , "merge_vars" .= object mergeVars
+                 , "merge_vars" .= filterObject mergeVars
                  ]
 
 data BatchUnsubscribeResult = BatchUnsubscribeResult
@@ -254,11 +361,12 @@ instance FromJSON BatchUnsubscribeResult where
 
 
 -- | Unsubscribe multiple users from a list.
+--
 --   See <http://apidocs.mailchimp.com/api/2.0/lists/batch-unsubscribe.php>
 --
 --   Usage:
 --
--- >>> batchUnsubscribe listId [Email "example@example.com"] (Just deleteMember) (Just sendGoodbye) (Just sendNotify)
+-- > batchUnsubscribe listId [Email "example@example.com"] (Just deleteMember) (Just sendGoodbye) (Just sendNotify)
 batchUnsubscribe :: ListId -> [EmailId] -> Maybe Bool -> Maybe Bool -> Maybe Bool -> MailchimpT m BatchUnsubscribeResult
 batchUnsubscribe  listId batchItems deleteMember sendGoodbye sendNotify = 
   query "lists" "batch-unsubscribe" $ 
@@ -325,6 +433,7 @@ instance FromJSON ClientResults where
 
 
 -- | Gets the user agent info for members of the list.
+--
 --   See <http://apidocs.mailchimp.com/api/2.0/lists/clients.php>
 clients :: ListId -> MailchimpT m ClientResults
 clients listId = 
@@ -364,9 +473,11 @@ instance FromJSON GrowthHistoryResult where
 firstJust :: Maybe Int -> Maybe Text -> Maybe Int
 firstJust a b = if isJust a then a else unpack `fmap` b >>= readMaybe
 $(deriveToJSON (convertName 3) ''GrowthHistoryResult)
+
 -- $(deriveFromJSON (convertName 3) ''GrowthHistoryResult)
 
 -- | Gets the growth history by month for an account or list.
+--
 --   See <http://apidocs.mailchimp.com/api/2.0/lists/growth-history.php>
 growthHistory :: Maybe ListId -> MailchimpT m [GrowthHistoryResult]
 growthHistory listId = 
@@ -390,6 +501,7 @@ instance FromJSON CompleteResult where
 -- $(deriveFromJSON (convertName 2) ''CompleteResult)
 
 -- | Adds an interest group to a list.
+--
 --   See <http://apidocs.mailchimp.com/api/2.0/lists/interest-group-add.php>
 interestGroupAdd :: ListId -> Text -> Maybe GroupingId -> MailchimpT m Bool
 interestGroupAdd listId name groupId =
@@ -398,6 +510,7 @@ interestGroupAdd listId name groupId =
                                                        , "grouping_id" .= groupId
                                                        ]
 -- | Removes an interest group from a list.
+--
 --   See <http://apidocs.mailchimp.com/api/2.0/lists/interest-group-del.php>
 interestGroupDelete :: ListId -> Text -> Maybe GroupingId -> MailchimpT m Bool
 interestGroupDelete listId name groupId =
@@ -407,6 +520,7 @@ interestGroupDelete listId name groupId =
                                                        ]
 
 -- | Changes the name of an interest group
+--
 --   See <http://apidocs.mailchimp.com/api/2.0/lists/interest-group-update.php>
 interestGroupUpdate :: ListId -> Text -> Text -> Maybe GroupingId -> MailchimpT m Bool
 interestGroupUpdate listId oldName newName groupId = 
@@ -449,6 +563,7 @@ instance FromJSON InterestGroupingAddResult where
 -- $(deriveFromJSON (convertName 4) ''InterestGroupingAddResult)
 
 -- | Creates a new Interest Grouping
+--
 --   See <http://apidocs.mailchimp.com/api/2.0/lists/interest-grouping-add.php>
 interestGroupingAdd :: ListId -> Text -> GroupingType -> [Text] -> MailchimpT m GroupingId
 interestGroupingAdd listId name groupingType groups = do
@@ -458,16 +573,19 @@ interestGroupingAdd listId name groupingType groups = do
                                                       , "groups" .= groups
                                                       ]
 -- | Deletes an Interest Grouping
+--
 --   See <http://apidocs.mailchimp.com/api/2.0/lists/interest-grouping-del.php>
 interestGroupingDelete :: GroupingId -> MailchimpT m Bool
 interestGroupingDelete groupId = 
   fmap crComplete $ query "lists" "interest-grouping-del" ["grouping_id" .= groupId ]
 
 -- | Updates an Interest Grouping. 
+--
 --   See <http://apidocs.mailchimp.com/api/2.0/lists/interest-grouping-update.php>
 --
 --   Usage
--- >>> interestGroupingUpdate groupId field value
+--
+-- > interestGroupingUpdate groupId field value
 --
 --   Where "field" is either "name" or "type" and value is the new value for that field.
 interestGroupingUpdate :: GroupingId -> Text -> Text -> MailchimpT m Bool
@@ -515,6 +633,7 @@ instance FromJSON InterestGrouping where
 -- $(deriveFromJSON (convertName 2) ''InterestGrouping)
 
 -- | Lists the Interest Groupings for a list.
+--
 --   See <http://apidocs.mailchimp.com/api/2.0/lists/interest-groupings.php>
 interestGroupings :: ListId -> Maybe Bool -> MailchimpT m [InterestGrouping]
 interestGroupings listId counts =
@@ -563,6 +682,7 @@ instance FromJSON ListStats where
 
 
 -- $(deriveFromJSON (convertName 2) ''ListStats)
+
 $(deriveToJSON (convertName 2) ''ListStats)
 
 data ListInfo = ListInfo
@@ -689,10 +809,12 @@ instance ToJSON SortDir where
   toJSON SortDirAsc = String "ASC"
 
 -- | Get information for all of the lists in the account.
+--
 --   See <http://apidocs.mailchimp.com/api/2.0/lists/list.php>
 --
 --   Usage:
--- >>> listInfo (Just listFilter) (Just startPage) (Just limitCount) (Just sortField) (Just sortDir)
+--
+-- > listInfo (Just listFilter) (Just startPage) (Just limitCount) (Just sortField) (Just sortDir)
 listInfo :: Maybe ListFilters -> Maybe Int -> Maybe Int -> Maybe SortField -> Maybe SortDir -> MailchimpT m ListsResult
 listInfo filters start limit sortField sortDir =
   query "lists" "list" [ "filters" .= filters
@@ -722,6 +844,7 @@ instance FromJSON ListLocationsResult where
 -- $(deriveFromJSON (convertName 3) ''ListLocationsResult)
 
 -- | Get the locations for the subscribers of a list
+--
 --   See <http://apidocs.mailchimp.com/api/2.0/lists/locations.php>
 listLocations :: ListId -> MailchimpT m [ListLocationsResult]
 listLocations listId =
@@ -784,6 +907,7 @@ instance FromJSON MemberActivityResult where
 -- $(deriveFromJSON (convertName 3) ''MemberActivityResult)
 
 -- | Get the activity of a list of members for a list
+--
 --   See <http://apidocs.mailchimp.com/api/2.0/lists/member-activity.php>
 memberActivity :: ListId -> [EmailId] -> MailchimpT m MemberActivityResult
 memberActivity listId emails = 
@@ -986,6 +1110,7 @@ instance FromJSON MemberInfoResult where
 -- $(deriveFromJSON (convertName 3) ''MemberInfoResult)
 
 -- | Get information for members of a list
+--
 --   See <http://apidocs.mailchimp.com/api/2.0/lists/member-info.php>
 memberInfo :: ListId -> [EmailId] -> MailchimpT m MemberInfoResult
 memberInfo listId emails =
@@ -1019,6 +1144,7 @@ instance FromJSON MembersResult where
 
 
 -- | Get all the members of a list matching a query.
+--
 --   See <http://apidocs.mailchimp.com/api/2.0/lists/members.php>
 members :: ListId -> Maybe MemberStatus -> Maybe Int -> Maybe Int -> Maybe Text -> Maybe SortDir -> Maybe Value -> MailchimpT m MembersResult
 members listId status start limit sortField sortDir segment = 
@@ -1079,7 +1205,7 @@ instance FromJSON MergeVarType where
 -- | Options used to create merge vars. Default instance is defined on this so you can easily
 --   create new ones. E.g.
 --
--- >>> def {mvoFieldType = Just TextMergeVarType, mvoHelptext = Just "Help text" }
+-- > def {mvoFieldType = Just TextMergeVarType, mvoHelptext = Just "Help text" }
 data MergeVarOptions = MergeVarOptions
   { mvoFieldType :: Maybe MergeVarType
   , mvoReq :: Maybe Bool
@@ -1166,6 +1292,7 @@ instance FromJSON MergeVarResult where
 $(deriveToJSON (convertName 3) ''MergeVarResult)
 
 -- | Add a merge tag to a list.
+--
 --   See <http://apidocs.mailchimp.com/api/2.0/lists/merge-var-add.php>
 mergeVarAdd :: ListId -> Text -> Text -> Maybe MergeVarOptions -> MailchimpT m MergeVarResult
 mergeVarAdd listId tag name options =
@@ -1176,6 +1303,7 @@ mergeVarAdd listId tag name options =
                                 ]
 
 -- | Delete a merge tag from all members
+--
 --   See <http://apidocs.mailchimp.com/api/2.0/lists/merge-var-del.php>
 mergeVarDelete :: ListId -> Text -> MailchimpT m Bool
 mergeVarDelete listId tag =
@@ -1184,6 +1312,7 @@ mergeVarDelete listId tag =
                                                   ]
 
 -- | Reset all data stored in a merge var.
+--
 --   See <http://apidocs.mailchimp.com/api/2.0/lists/merge-var-reset.php>
 mergeVarReset :: ListId -> Text -> MailchimpT m Bool
 mergeVarReset listId tag = 
@@ -1192,6 +1321,7 @@ mergeVarReset listId tag =
                                                     ]
                                                   
 -- | Set a merge var for a specific user. Only works for merge var 1-30
+--
 --   See <http://apidocs.mailchimp.com/api/2.0/lists/merge-var-set.php>
 mergeVarSet :: ListId -> Text -> Text -> MailchimpT m Bool
 mergeVarSet listId tag value =
@@ -1201,6 +1331,7 @@ mergeVarSet listId tag value =
                                                   ]
 
 -- | Update the options of a merge var.
+--
 --   See <http://apidocs.mailchimp.com/api/2.0/lists/merge-var-update.php>
 mergeVarUpdate :: ListId -> Text -> MergeVarOptions -> MailchimpT m MergeVarResult
 mergeVarUpdate listId tag options =
@@ -1263,6 +1394,7 @@ instance FromJSON MergeVarInfoResult where
 -- $(deriveFromJSON (convertName 4) ''MergeVarInfoResult)
 
 -- | Retrieve list of marge vars for a list.
+--
 --   See <http://apidocs.mailchimp.com/api/2.0/lists/merge-vars.php>
 mergeVarInfo :: [ListId] -> MailchimpT m MergeVarInfoResult
 mergeVarInfo listId =
@@ -1284,6 +1416,7 @@ instance FromJSON StaticSegmentAddResult where
 -- $(deriveFromJSON (convertName 4) ''StaticSegmentAddResult)
 
 -- | Add a static segment for later use.
+--
 --   See <http://apidocs.mailchimp.com/api/2.0/lists/static-segment-add.php>
 staticSegmentAdd :: ListId -> Text -> MailchimpT m SegmentId
 staticSegmentAdd listId name =
@@ -1292,6 +1425,7 @@ staticSegmentAdd listId name =
                                                    ]
 
 -- | Delete a static segment
+--
 --   See <http://apidocs.mailchimp.com/api/2.0/lists/static-segment-del.php>
 staticSegmentDelete :: ListId -> SegmentId -> MailchimpT m Bool
 staticSegmentDelete listId segmentId =
@@ -1318,6 +1452,7 @@ instance FromJSON StaticSegmentMembersAddResult where
 
 
 -- | Add list members to a static segment
+--
 --   See <http://apidocs.mailchimp.com/api/2.0/lists/static-segment-members-add.php>
 staticSegmentMembersAdd :: ListId -> SegmentId -> [EmailId] -> MailchimpT m StaticSegmentMembersAddResult
 staticSegmentMembersAdd listId segmentId emails = do
@@ -1353,6 +1488,7 @@ staticSegmentMembersDelete listId segmentId emails = do
                                              ]
 
 -- | Reset a static segment and remove all members.
+--
 --   See <http://apidocs.mailchimp.com/api/2.0/lists/static-segment-reset.php>
 staticSegmentReset :: ListId -> SegmentId -> MailchimpT m Bool
 staticSegmentReset listId segmentId = 
@@ -1384,12 +1520,14 @@ instance FromJSON StaticSegmentResult where
 -- $(deriveFromJSON (convertName 3) ''StaticSegmentResult)
 
 -- | Get all of the static segments
+--
 --   See <http://apidocs.mailchimp.com/api/2.0/lists/static-segments.php>
 staticSegments :: ListId -> MailchimpT m [StaticSegmentResult]
 staticSegments listId =
   query "lists" "static-segments" [ "id" .= listId ]
 
 -- | Unsubscribe a user from a list.
+--
 --   See <http://apidocs.mailchimp.com/api/2.0/lists/unsubscribe.php>
 unsubscribe :: ListId -> EmailId -> Maybe Bool -> Maybe Bool -> Maybe Bool -> MailchimpT m Bool
 unsubscribe listId emailId deleteMember sendGoodbye sendNotify =
@@ -1401,6 +1539,7 @@ unsubscribe listId emailId deleteMember sendGoodbye sendNotify =
                                                 ]
 
 -- | Edit the information for a member
+--
 --   See <http://apidocs.mailchimp.com/api/2.0/lists/update-member.php>
 updateMember :: ListId -> EmailId -> [MergeVarsItem] -> Maybe EmailType -> Maybe Bool -> MailchimpT m EmailResult
 updateMember listId emailId mergeVars emailType replaceInterests = 
@@ -1435,6 +1574,7 @@ instance FromJSON WebhookActions where
 
 
 $(deriveToJSON (convertName 2) ''WebhookActions)
+
 -- $(deriveFromJSON (convertName 2) ''WebhookActions)
 
 instance Default WebhookActions where
@@ -1456,6 +1596,7 @@ instance FromJSON WebhookSources where
   parseJSON _ = mzero
 
 $(deriveToJSON (convertName 2) ''WebhookSources)
+
 -- $(deriveFromJSON (convertName 2) ''WebhookSources)
 
 type WebhookId = Text
@@ -1474,6 +1615,7 @@ instance FromJSON WebhookAddResult where
 -- $(deriveFromJSON (convertName 3) ''WebhookAddResult)
 
 -- | Add a webhook URL to a list.
+--
 --   See <http://apidocs.mailchimp.com/api/2.0/lists/webhook-add.php>
 webhookAdd :: ListId -> Text -> Maybe WebhookActions -> Maybe WebhookSources -> MailchimpT m WebhookAddResult
 webhookAdd listId url actions sources =
@@ -1484,6 +1626,7 @@ webhookAdd listId url actions sources =
                               ]
 
 -- | Delete a webhook URL from a list.
+--
 --   See <http://apidocs.mailchimp.com/api/2.0/lists/webhook-del.php>
 webhookDelete :: ListId -> Text -> MailchimpT m Bool
 webhookDelete listId url =
@@ -1509,6 +1652,7 @@ instance FromJSON WebhookResult where
 -- $(deriveFromJSON (convertName 2) ''WebhookResult)
 
 -- | List all the webhooks for a list.
+--
 --   See <http://apidocs.mailchimp.com/api/2.0/lists/webhooks.php>
 webhooks :: ListId -> MailchimpT m [WebhookResult]
 webhooks listId =
