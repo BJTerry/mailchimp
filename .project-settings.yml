@@ -1,0 +1,26 @@
+extensions:
+  TemplateHaskell: true
+  DeriveDataTypeable: true
+  RankNTypes: true
+  BangPatterns: true
+  PatternGuards: true
+  FlexibleContexts: true
+  OverloadedStrings: true
+cabal-file: project.cabal
+version: 1
+environment: null
+module-template: ! 'module MODULE_NAME where
+
+'
+ghc-args: []
+modules:
+  Web.Mailchimp.Lists:
+    filename: Web/Mailchimp/Lists.hs
+  Web.Mailchimp:
+    filename: Web/Mailchimp.hs
+  Web.Mailchimp.Util:
+    filename: Web/Mailchimp/Util.hs
+  Web.Mailchimp.Campaigns:
+    filename: Web/Mailchimp/Campaigns.hs
+  Main(test/hunit.hs):
+    filename: test/hunit.hs
