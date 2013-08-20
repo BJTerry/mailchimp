@@ -51,13 +51,14 @@ import Data.Typeable (Typeable)
 import Data.Aeson (FromJSON(..), (.:), Value(..), decode, (.=))
 import Data.Aeson.Types (Pair)
 import Data.Aeson.Encode (encode)
-import Data.Conduit (runResourceT, ResourceT)
+import Data.Conduit (runResourceT)
 import Network.HTTP.Conduit (parseUrl, newManager, httpLbs, RequestBody(..), Response(..), HttpException(..), Request(..), Manager)
 import Network.HTTP.Types (methodPost)
 import Network.HTTP.Types.Header (ResponseHeaders)
 import Control.Monad.Reader (ReaderT, MonadReader, runReaderT, ask)
 import Control.Monad.Logger (logDebug, LoggingT, runStderrLoggingT, MonadLogger, NoLoggingT(..))
 import Control.Monad.Base (MonadBase)
+import Control.Monad.Trans.Control (MonadBaseControl)
 
 -- | Represents the configuration for MailchimpT.
 data MailchimpConfig = MailchimpConfig 
@@ -77,9 +78,9 @@ defaultMailchimpConfig apiKey = do
                          , mcManager = man
                          }
 
-type MailchimpT m a =  (MonadIO m, MonadLogger m, MonadBase IO m) => ReaderT MailchimpConfig m a
+type MailchimpT m a =  (MonadIO m, MonadLogger m, MonadBaseControl IO m) => ReaderT MailchimpConfig m a
 
-runMailchimpT :: (MonadIO m, MonadLogger m, MonadBase IO m) => MailchimpConfig -> MailchimpT m a -> m a
+runMailchimpT :: (MonadIO m, MonadLogger m, MonadBaseControl IO m) => MailchimpConfig -> MailchimpT m a -> m a
 runMailchimpT config action = 
   runReaderT action config
 
@@ -147,14 +148,15 @@ query' section apiMethod request = do
                     , method = methodPost
                     }
   $(logDebug) $ pack . show $ requestBody req
-  response <- liftIO $ runResourceT $ catch (httpLbs req $ mcManager config) catchHttpException
+  response <- catch (liftIO $ runResourceT (httpLbs req $ mcManager config)) catchHttpException
   $(logDebug) $ pack . show $ responseBody response
   case decode $ responseBody response of
     Just result -> return result
     Nothing -> throwIO $ OtherMailchimpError (-1) "ParseError" "Could not parse result JSON from Mailchimp"
  where
-  catchHttpException :: HttpException -> ResourceT IO a
-  catchHttpException e@(StatusCodeException _ headers _) = 
+  catchHttpException :: HttpException -> MailchimpT m a
+  catchHttpException e@(StatusCodeException _ headers _) = do
+    $(logDebug) $ pack . show $ lookup "X-Response-Body-Start" headers
     maybe (throwIO e) throwIO (decodeError headers)
   catchHttpException e = throwIO e
   decodeError :: ResponseHeaders -> Maybe MailchimpError
