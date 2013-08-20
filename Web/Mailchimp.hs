@@ -1,4 +1,4 @@
-module Web.Mailchimp.Client 
+module Web.Mailchimp
   (
 
   -- * The MailchimpT monad
@@ -16,7 +16,7 @@ module Web.Mailchimp.Client
   , MailchimpApiKey(..)
   , mailchimpKey
   -- * Error handling
-  , MailchimpError
+  , MailchimpError(..)
   , 
   )
   where

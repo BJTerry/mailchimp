@@ -5,7 +5,7 @@ module Web.Mailchimp.Campaigns
   )
   where
 
-import Web.Mailchimp.Client
+import Web.Mailchimp
 import Web.Mailchimp.Util
 
 import Data.Text (Text)

@@ -102,7 +102,7 @@ module Web.Mailchimp.Lists
   )
   where
 
-import Web.Mailchimp.Client
+import Web.Mailchimp
 import Web.Mailchimp.Campaigns (CampaignId, CampaignInfo(..) )
 import Web.Mailchimp.Util
 

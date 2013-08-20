@@ -19,8 +19,8 @@ flag test-hunit
   manual: True
 
 library
-  exposed-modules:    Web.Mailchimp.Lists
-                      Web.Mailchimp.Client 
+  exposed-modules:    Web.Mailchimp
+                      Web.Mailchimp.Lists
                       Web.Mailchimp.Campaigns
                       Web.Mailchimp.Util
   -- other-modules:       
