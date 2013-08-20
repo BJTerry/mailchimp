@@ -1,3 +1,6 @@
+-- |
+-- Utility functions for Mailchimp
+--
 module Web.Mailchimp.Util
 
   where

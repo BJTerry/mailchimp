@@ -1,3 +1,6 @@
+-- |
+-- Implements the \"lists\" section of the Mailchimp JSON API.
+--
 module Web.Mailchimp.Lists
   ( 
   -- * Mailchimp API Methods
@@ -193,13 +196,21 @@ instance FromJSON EmailType where
 -- > subscribeUser listId emailId (Just [("FNAME", "John"), ("LNAME", "Doe")]) (Just doubleOptin) (Just updateExisting) (Just replaceInterests) (Just sendWelcome)
 -- 
 subscribeUser :: ListId 
+              -- ^ The list to subscribe the user to
               -> EmailId 
+              -- ^ Subscriber's email              
               -> Maybe [MergeVarsItem] 
+              -- ^ List of merge vars for the subscriber
               -> Maybe EmailType
+              -- ^ Type of e-mail
               -> Maybe Bool 
+              -- ^ Send the user an optin email
               -> Maybe Bool 
+              -- ^ Update existing subscriber
               -> Maybe Bool 
+              -- ^ Replace user interests
               -> Maybe Bool 
+              -- ^ Send welcome email
               -> MailchimpT m EmailResult
 subscribeUser listId 
               emailId 
@@ -265,7 +276,15 @@ instance FromJSON AbuseResults where
 --   Example Usage: 
 --
 -- > abuseReports listId (Just startingPage [indexed at 0]) (Just limitResults) (Just sinceDate)
-abuseReports :: ListId -> Maybe Int -> Maybe Int -> Maybe UTCTime -> MailchimpT m AbuseResults
+abuseReports :: ListId
+             -- ^ List
+             -> Maybe Int
+             -- ^ Start page (from 0)
+             -> Maybe Int
+             -- ^ Limit number of records
+             -> Maybe UTCTime
+             -- ^ Since time
+             -> MailchimpT m AbuseResults
 abuseReports listId start limit since = 
   query "lists" "abuse-reports" request
  where
@@ -323,7 +342,17 @@ $(deriveFromJSON (convertName 3) ''BatchSubscribeResult)
 --   Usage:
 --
 -- > batchSubscribe listId [(Email "example@example.com", EmailTypeHTML, [("FNAME", "John")]] (Just doubleOptin) (Just updateExisting) (Just replaceInterests)
-batchSubscribe :: ListId -> [(EmailId, EmailType, [MergeVarsItem])] -> Maybe Bool -> Maybe Bool -> Maybe Bool -> MailchimpT m BatchSubscribeResult
+batchSubscribe :: ListId
+               -- ^ List
+               -> [(EmailId, EmailType, [MergeVarsItem])]
+               -- ^ Emails, email type, and merge vars for the user               
+               -> Maybe Bool
+               -- ^ Send double optin email
+               -> Maybe Bool
+               -- ^ Update existing users
+               -> Maybe Bool
+               -- ^ Replace user interests
+               -> MailchimpT m BatchSubscribeResult
 batchSubscribe listId batchItems doubleOptin updateExisting replaceInterests = do
   query "lists" "batch-subscribe" request
  where
@@ -367,7 +396,17 @@ instance FromJSON BatchUnsubscribeResult where
 --   Usage:
 --
 -- > batchUnsubscribe listId [Email "example@example.com"] (Just deleteMember) (Just sendGoodbye) (Just sendNotify)
-batchUnsubscribe :: ListId -> [EmailId] -> Maybe Bool -> Maybe Bool -> Maybe Bool -> MailchimpT m BatchUnsubscribeResult
+batchUnsubscribe :: ListId
+                 -- ^ List
+                 -> [EmailId]
+                 -- ^ Emails to unsubscribe
+                 -> Maybe Bool
+                 -- ^ Delete member after unsubscribing
+                 -> Maybe Bool
+                 -- ^ Send goodbye email
+                 -> Maybe Bool
+                 -- ^ Send notification email to list administrator
+                 -> MailchimpT m BatchUnsubscribeResult
 batchUnsubscribe  listId batchItems deleteMember sendGoodbye sendNotify = 
   query "lists" "batch-unsubscribe" $ 
     [ "id" .= listId
@@ -464,14 +503,11 @@ instance FromJSON GrowthHistoryResult where
                          Just (String s) -> fmap readMaybe $ v .: k
                          Just (Number n) -> v .:? k
                          _ -> return Nothing
-
---   where
---    firstJust :: Maybe Int -> Maybe Text -> Maybe Int
---    firstJust a b = if isJust a then a else unpack `fmap` b >>= readMaybe
+    firstJust :: Maybe Int -> Maybe Text -> Maybe Int
+    firstJust a b = if isJust a then a else unpack `fmap` b >>= readMaybe
   parseJSON _ = mzero
 
-firstJust :: Maybe Int -> Maybe Text -> Maybe Int
-firstJust a b = if isJust a then a else unpack `fmap` b >>= readMaybe
+
 $(deriveToJSON (convertName 3) ''GrowthHistoryResult)
 
 -- $(deriveFromJSON (convertName 3) ''GrowthHistoryResult)
@@ -503,7 +539,13 @@ instance FromJSON CompleteResult where
 -- | Adds an interest group to a list.
 --
 --   See <http://apidocs.mailchimp.com/api/2.0/lists/interest-group-add.php>
-interestGroupAdd :: ListId -> Text -> Maybe GroupingId -> MailchimpT m Bool
+interestGroupAdd :: ListId
+                 -- ^ List
+                 -> Text
+                 -- ^ Group name
+                 -> Maybe GroupingId
+                 -- ^ Grouping to put group in
+                 -> MailchimpT m Bool
 interestGroupAdd listId name groupId =
   fmap crComplete $ query "lists" "interest-group-add" [ "id" .= listId
                                                        , "group_name" .= name
@@ -512,7 +554,13 @@ interestGroupAdd listId name groupId =
 -- | Removes an interest group from a list.
 --
 --   See <http://apidocs.mailchimp.com/api/2.0/lists/interest-group-del.php>
-interestGroupDelete :: ListId -> Text -> Maybe GroupingId -> MailchimpT m Bool
+interestGroupDelete :: ListId
+                    -- ^ List
+                    -> Text
+                    -- ^ Group name
+                    -> Maybe GroupingId
+                    -- ^ Optional grouping
+                    -> MailchimpT m Bool
 interestGroupDelete listId name groupId =
   fmap crComplete $ query "lists" "interest-group-del" [ "id" .= listId
                                                        , "group_name" .= name
@@ -522,7 +570,15 @@ interestGroupDelete listId name groupId =
 -- | Changes the name of an interest group
 --
 --   See <http://apidocs.mailchimp.com/api/2.0/lists/interest-group-update.php>
-interestGroupUpdate :: ListId -> Text -> Text -> Maybe GroupingId -> MailchimpT m Bool
+interestGroupUpdate :: ListId
+                    -- ^ List
+                    -> Text
+                    -- ^ Old group name
+                    -> Text
+                    -- ^ New group name
+                    -> Maybe GroupingId
+                    -- ^ Optional grouping
+                    -> MailchimpT m Bool
 interestGroupUpdate listId oldName newName groupId = 
   fmap crComplete $ query "lists" "interest-group-update" [ "id" .= listId
                                                           , "old_name" .= oldName
@@ -565,7 +621,15 @@ instance FromJSON InterestGroupingAddResult where
 -- | Creates a new Interest Grouping
 --
 --   See <http://apidocs.mailchimp.com/api/2.0/lists/interest-grouping-add.php>
-interestGroupingAdd :: ListId -> Text -> GroupingType -> [Text] -> MailchimpT m GroupingId
+interestGroupingAdd :: ListId
+                    -- ^ List
+                    -> Text
+                    -- ^ New grouping name
+                    -> GroupingType
+                    -- ^ Type of grouping
+                    -> [Text]
+                    -- ^ New groups in grouping
+                    -> MailchimpT m GroupingId
 interestGroupingAdd listId name groupingType groups = do
   fmap igarId $ query "lists" "interest-grouping-add" [ "id" .= listId
                                                       , "name" .= name
@@ -588,7 +652,13 @@ interestGroupingDelete groupId =
 -- > interestGroupingUpdate groupId field value
 --
 --   Where "field" is either "name" or "type" and value is the new value for that field.
-interestGroupingUpdate :: GroupingId -> Text -> Text -> MailchimpT m Bool
+interestGroupingUpdate :: GroupingId
+                       -- ^ Grouping
+                       -> Text
+                       -- ^ Field to update, either "name" or "type"
+                       -> Text
+                       -- ^ New value for field
+                       -> MailchimpT m Bool
 interestGroupingUpdate groupId name value = do
   fmap crComplete $ query "lists" "interest-grouping-update" [ "grouping_id" .= groupId
                                                              , "name" .= name
@@ -635,7 +705,11 @@ instance FromJSON InterestGrouping where
 -- | Lists the Interest Groupings for a list.
 --
 --   See <http://apidocs.mailchimp.com/api/2.0/lists/interest-groupings.php>
-interestGroupings :: ListId -> Maybe Bool -> MailchimpT m [InterestGrouping]
+interestGroupings :: ListId
+                  -- ^ List
+                  -> Maybe Bool
+                  -- ^ Calculate counts for the groupings, which is slower
+                  -> MailchimpT m [InterestGrouping]
 interestGroupings listId counts =
   query "lists" "interest-groupings" [ "id" .= listId
                                      , "counts" .= counts
@@ -689,7 +763,7 @@ data ListInfo = ListInfo
   { liId :: ListId
   , liWebId :: Int
   , liName :: Text
-  , liDateCreated :: MCTime
+  , liDateCreated :: UTCTime
   , liEmailTypeOption :: Bool
   , liUseAwesomebar :: Bool
   , liDefaultFromName :: Text
@@ -710,7 +784,7 @@ instance FromJSON ListInfo where
     li_id <- v .: "id"
     li_web_id <- v .: "web_id"
     li_name <- v .: "name"
-    li_date_created <- v .: "date_created"
+    li_date_created <- fmap unMCTime $ v .: "date_created"
     li_email_type_option <- v .: "email_type_option"
     li_use_awesomebar <- v .: "use_awesomebar"
     li_default_from_name <- v .: "default_from_name"
@@ -769,8 +843,8 @@ data ListFilters = ListFilters
   , lfFromName :: Maybe Text
   , lfFromEmail :: Maybe Text
   , lfFromSubject :: Maybe Text
-  , lfCreatedBefore :: Maybe MCTime
-  , lfCreatedAfter :: Maybe MCTime
+  , lfCreatedBefore :: Maybe UTCTime
+  , lfCreatedAfter :: Maybe UTCTime
   , lfExact :: Maybe Bool
   }
   deriving (Show, Eq)
@@ -782,8 +856,8 @@ instance FromJSON ListFilters where
     lf_from_name <- v .: "from_name"
     lf_from_email <- v .: "from_email"
     lf_from_subject <- v .: "from_subject"
-    lf_created_before <- v .: "created_before"
-    lf_created_after <- v .: "created_after"
+    lf_created_before <- (fmap . fmap) unMCTime $ v .: "created_before"
+    lf_created_after <- (fmap . fmap) unMCTime $ v .: "created_after"
     lf_exact <- v .: "exact"
     return $ ListFilters lf_list_id lf_list_name lf_from_name lf_from_email lf_from_subject lf_created_before lf_created_after lf_exact
   parseJSON _ = mzero
@@ -815,7 +889,17 @@ instance ToJSON SortDir where
 --   Usage:
 --
 -- > listInfo (Just listFilter) (Just startPage) (Just limitCount) (Just sortField) (Just sortDir)
-listInfo :: Maybe ListFilters -> Maybe Int -> Maybe Int -> Maybe SortField -> Maybe SortDir -> MailchimpT m ListsResult
+listInfo :: Maybe ListFilters
+         -- ^ Filters for lists to return
+         -> Maybe Int
+         -- ^ Start page, from 0
+         -> Maybe Int
+         -- ^ Limit number of lists to return
+         -> Maybe SortField
+         -- ^ Field to sort on
+         -> Maybe SortDir
+         -- ^ Sort direction
+         -> MailchimpT m ListsResult
 listInfo filters start limit sortField sortDir =
   query "lists" "list" [ "filters" .= filters
                        , "start" .= start
@@ -852,7 +936,7 @@ listLocations listId =
 
 data ActivityAction = ActivityAction
   { aaAction :: Text
-  , aaTimestamp :: MCTime
+  , aaTimestamp :: UTCTime
   , aaUrl :: Text
   , aaType :: Text
   , aaCampaignId :: CampaignId
@@ -863,7 +947,7 @@ data ActivityAction = ActivityAction
 instance FromJSON ActivityAction where
   parseJSON (Object v) = do
     aa_action <- v .: "action"
-    aa_timestamp <- v .: "timestamp"
+    aa_timestamp <- fmap unMCTime $ v .: "timestamp"
     aa_url <- v .: "url"
     aa_type <- v .: "type"
     aa_campaign_id <- v .: "campaign_id"
@@ -988,8 +1072,8 @@ instance FromJSON MemberStaticSegment where
 data MemberNote = MemberNote
   { mnId :: Int
   , mnNote :: Text
-  , mnCreated :: MCTime
-  , mnUpdated :: MCTime
+  , mnCreated :: UTCTime
+  , mnUpdated :: UTCTime
   , mnCreatedByName :: Text
   }
   deriving (Show, Eq)
@@ -998,8 +1082,8 @@ instance FromJSON MemberNote where
   parseJSON (Object v) = do
     mn_id <- v .: "id"
     mn_note <- v .: "note"
-    mn_created <- v .: "created"
-    mn_updated <- v .: "updated"
+    mn_created <- fmap unMCTime $ v .: "created"
+    mn_updated <- fmap unMCTime $ v .: "updated"
     mn_created_by_name <- v .: "created_by_name"
     return $ MemberNote mn_id mn_note mn_created mn_updated mn_created_by_name
   parseJSON _ = mzero
@@ -1014,12 +1098,12 @@ data MemberInfoFields = MemberInfoFields
   , miIpSignup :: Text
   , miTimestampSignup :: Text
   , miIpOpt :: Text
-  , miTimestampOpt :: MCTime
+  , miTimestampOpt :: UTCTime
   , miMemberRating :: Int
   , miCampaignId :: CampaignId
   , miLists :: [MemberList]
-  , miTimestamp :: MCTime
-  , miInfoChanged :: MCTime
+  , miTimestamp :: UTCTime
+  , miInfoChanged :: UTCTime
   , miWebId :: Int
   , miListId :: ListId
   , miListName :: Text
@@ -1040,12 +1124,12 @@ instance FromJSON MemberInfoFields where
     mi_ip_signup <- v .: "ip_signup"
     mi_timestamp_signup <- v .: "timestamp_signup"
     mi_ip_opt <- v .: "ip_opt"
-    mi_timestamp_opt <- v .: "timestamp_opt"
+    mi_timestamp_opt <- fmap unMCTime $ v .: "timestamp_opt"
     mi_member_rating <- v .: "member_rating"
     mi_campaign_id <- v .: "campaign_id"
     mi_lists <- v .: "lists"
-    mi_timestamp <- v .: "timestamp"
-    mi_info_changed <- v .: "info_changed"
+    mi_timestamp <- fmap unMCTime $ v .: "timestamp"
+    mi_info_changed <- fmap unMCTime $ v .: "info_changed"
     mi_web_id <- v .: "web_id"
     mi_list_id <- v .: "list_id"
     mi_list_name <- v .: "list_name"
@@ -1146,7 +1230,21 @@ instance FromJSON MembersResult where
 -- | Get all the members of a list matching a query.
 --
 --   See <http://apidocs.mailchimp.com/api/2.0/lists/members.php>
-members :: ListId -> Maybe MemberStatus -> Maybe Int -> Maybe Int -> Maybe Text -> Maybe SortDir -> Maybe Value -> MailchimpT m MembersResult
+members :: ListId
+        -- ^ List
+        -> Maybe MemberStatus
+        -- ^ Member status filter
+        -> Maybe Int
+        -- ^ Start page, from 0
+        -> Maybe Int
+        -- ^ Limit of records returned
+        -> Maybe Text
+        -- ^ Field to sort on
+        -> Maybe SortDir
+        -- ^ Ascending or descending
+        -> Maybe Value
+        -- ^ Segment to return
+        -> MailchimpT m MembersResult
 members listId status start limit sortField sortDir segment = 
   query "lists" "members" [ "id" .= listId
                           , "status" .= status
@@ -1294,7 +1392,15 @@ $(deriveToJSON (convertName 3) ''MergeVarResult)
 -- | Add a merge tag to a list.
 --
 --   See <http://apidocs.mailchimp.com/api/2.0/lists/merge-var-add.php>
-mergeVarAdd :: ListId -> Text -> Text -> Maybe MergeVarOptions -> MailchimpT m MergeVarResult
+mergeVarAdd :: ListId
+            -- ^ List
+            -> Text
+            -- ^ Tag for merge var
+            -> Text
+            -- ^ Name of merge var
+            -> Maybe MergeVarOptions
+            -- ^ Options for merge var
+            -> MailchimpT m MergeVarResult
 mergeVarAdd listId tag name options =
   query "lists" "merge-var-add" [ "id" .= listId
                                 , "tag" .= tag
@@ -1305,7 +1411,11 @@ mergeVarAdd listId tag name options =
 -- | Delete a merge tag from all members
 --
 --   See <http://apidocs.mailchimp.com/api/2.0/lists/merge-var-del.php>
-mergeVarDelete :: ListId -> Text -> MailchimpT m Bool
+mergeVarDelete :: ListId
+               -- ^ List
+               -> Text
+               -- ^ Merge var tag
+               -> MailchimpT m Bool
 mergeVarDelete listId tag =
   fmap crComplete $ query "lists" "merge-var-del" [ "id" .= listId
                                                   , "tag" .= tag
@@ -1314,16 +1424,26 @@ mergeVarDelete listId tag =
 -- | Reset all data stored in a merge var.
 --
 --   See <http://apidocs.mailchimp.com/api/2.0/lists/merge-var-reset.php>
-mergeVarReset :: ListId -> Text -> MailchimpT m Bool
+mergeVarReset :: ListId
+              -- ^ List
+              -> Text
+              -- ^ Merge var tag
+              -> MailchimpT m Bool
 mergeVarReset listId tag = 
   fmap crComplete $ query "lists" "merge-var-reset" [ "id" .= listId
                                                     , "tag" .= tag
                                                     ]
                                                   
--- | Set a merge var for a specific user. Only works for merge var 1-30
+-- | Set a merge var for all users. Only works for merge var 1-30
 --
 --   See <http://apidocs.mailchimp.com/api/2.0/lists/merge-var-set.php>
-mergeVarSet :: ListId -> Text -> Text -> MailchimpT m Bool
+mergeVarSet :: ListId
+            -- ^ List
+            -> Text
+            -- ^ Merge var tag
+            -> Text
+            -- ^ New merge var value
+            -> MailchimpT m Bool
 mergeVarSet listId tag value =
   fmap crComplete $ query "lists" "merge-var-set" [ "id" .= listId
                                                   , "tag" .= tag
@@ -1333,7 +1453,13 @@ mergeVarSet listId tag value =
 -- | Update the options of a merge var.
 --
 --   See <http://apidocs.mailchimp.com/api/2.0/lists/merge-var-update.php>
-mergeVarUpdate :: ListId -> Text -> MergeVarOptions -> MailchimpT m MergeVarResult
+mergeVarUpdate :: ListId
+               -- ^ List
+               -> Text
+               -- ^ Merge var tag
+               -> MergeVarOptions
+               -- ^ Merge var options
+               -> MailchimpT m MergeVarResult
 mergeVarUpdate listId tag options =
   query "lists" "merge-var-update" [ "id" .= listId
                                    , "tag" .=  tag
@@ -1418,7 +1544,11 @@ instance FromJSON StaticSegmentAddResult where
 -- | Add a static segment for later use.
 --
 --   See <http://apidocs.mailchimp.com/api/2.0/lists/static-segment-add.php>
-staticSegmentAdd :: ListId -> Text -> MailchimpT m SegmentId
+staticSegmentAdd :: ListId
+                 -- ^ List
+                 -> Text
+                 -- ^ New static segment name
+                 -> MailchimpT m SegmentId
 staticSegmentAdd listId name =
   fmap ssarId $ query "lists" "static-segment-add" [ "id" .= listId
                                                    , "name" .= name
@@ -1500,9 +1630,9 @@ data StaticSegmentResult = StaticSegmentResult
   { ssrId :: SegmentId
   , ssrName :: Text
   , ssrMemberCount :: Int
-  , ssrCreatedDate :: Maybe MCTime
-  , ssrLastUpdate :: Maybe MCTime
-  , ssrLastReset :: Maybe MCTime
+  , ssrCreatedDate :: Maybe UTCTime
+  , ssrLastUpdate :: Maybe UTCTime
+  , ssrLastReset :: Maybe UTCTime
   }
   deriving (Show, Eq)
 
@@ -1511,9 +1641,9 @@ instance FromJSON StaticSegmentResult where
     ssr_id <- v .: "id"
     ssr_name <- v .: "name"
     ssr_member_count <- v .: "member_count"
-    ssr_created_date <- v .: "created_date"
-    ssr_last_update <- v .: "last_update"
-    ssr_last_reset <- v .: "last_reset"
+    ssr_created_date <- (fmap . fmap) unMCTime $ v .: "created_date"
+    ssr_last_update <- (fmap . fmap) unMCTime $ v .: "last_update"
+    ssr_last_reset <- (fmap . fmap) unMCTime $  v .: "last_reset"
     return $ StaticSegmentResult ssr_id ssr_name ssr_member_count ssr_created_date ssr_last_update ssr_last_reset
   parseJSON _ = mzero
 
@@ -1529,7 +1659,17 @@ staticSegments listId =
 -- | Unsubscribe a user from a list.
 --
 --   See <http://apidocs.mailchimp.com/api/2.0/lists/unsubscribe.php>
-unsubscribe :: ListId -> EmailId -> Maybe Bool -> Maybe Bool -> Maybe Bool -> MailchimpT m Bool
+unsubscribe :: ListId
+            -- ^ List
+            -> EmailId
+            -- ^ Email to unsubscribe
+            -> Maybe Bool
+            -- ^ Delete member after unsubscribing
+            -> Maybe Bool
+            -- ^ Send goodbye email
+            -> Maybe Bool
+            -- ^ Send notification email to administrator
+            -> MailchimpT m Bool
 unsubscribe listId emailId deleteMember sendGoodbye sendNotify =
   fmap crComplete $ query "lists" "unsubscribe" [ "id" .= listId
                                                 , "email" .= emailId
@@ -1541,7 +1681,17 @@ unsubscribe listId emailId deleteMember sendGoodbye sendNotify =
 -- | Edit the information for a member
 --
 --   See <http://apidocs.mailchimp.com/api/2.0/lists/update-member.php>
-updateMember :: ListId -> EmailId -> [MergeVarsItem] -> Maybe EmailType -> Maybe Bool -> MailchimpT m EmailResult
+updateMember :: ListId
+             -- ^ List
+             -> EmailId
+             -- ^ Email of member
+             -> [MergeVarsItem]
+             -- ^ Merge vars
+             -> Maybe EmailType
+             -- ^ Email type to send
+             -> Maybe Bool
+             -- ^ Replace interests
+             -> MailchimpT m EmailResult
 updateMember listId emailId mergeVars emailType replaceInterests = 
   query "lists" "update-member" [ "id" .= listId
                                 , "email" .= emailId
@@ -1617,7 +1767,15 @@ instance FromJSON WebhookAddResult where
 -- | Add a webhook URL to a list.
 --
 --   See <http://apidocs.mailchimp.com/api/2.0/lists/webhook-add.php>
-webhookAdd :: ListId -> Text -> Maybe WebhookActions -> Maybe WebhookSources -> MailchimpT m WebhookAddResult
+webhookAdd :: ListId
+           -- ^ List
+           -> Text
+           -- ^ URL of new webhook
+           -> Maybe WebhookActions
+           -- ^ Webhook actions
+           -> Maybe WebhookSources
+           -- ^ Webhook sources
+           -> MailchimpT m WebhookAddResult
 webhookAdd listId url actions sources =
   query "lists" "webhook-add" [ "id" .= listId
                               , "url" .= url
@@ -1628,7 +1786,11 @@ webhookAdd listId url actions sources =
 -- | Delete a webhook URL from a list.
 --
 --   See <http://apidocs.mailchimp.com/api/2.0/lists/webhook-del.php>
-webhookDelete :: ListId -> Text -> MailchimpT m Bool
+webhookDelete :: ListId
+              -- ^ List
+              -> Text
+              -- ^ URL to delete
+              -> MailchimpT m Bool
 webhookDelete listId url =
   fmap crComplete $ query "lists" "webhook-del" [ "id" .= listId
                               , "url" .= url

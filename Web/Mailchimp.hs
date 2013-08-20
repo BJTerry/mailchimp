@@ -1,3 +1,18 @@
+-- |
+--
+-- Module for interfacing with the Mailchimp JSON API.
+--
+-- Example usage to subscribe a user (in IO monad):
+--
+-- > let key = mailchimpKey "00000000000000000000000000000000-us1"
+-- > case key of
+-- >   Just k -> do
+-- >     cfg <- defaultmailchimpconfig k
+-- >     runMailchimp cfg $ do
+-- >       subscribeUser <listId> <userEmail> [] EmailTypeHTML Nothing Nothing Nothing
+-- 
+-- If you are in a monad that implements MonadIO, MonadLogger and MonadBase IO (such as a Yesod Handler), you can alse use runMailchimpT in the same way.
+
 module Web.Mailchimp
   (
 
@@ -9,7 +24,6 @@ module Web.Mailchimp
   -- * Running queries
   , query
   , query'
-  , apiEndpointUrl
   -- * Configuration
   , MailchimpConfig(..)
   , defaultMailchimpConfig
@@ -104,8 +118,15 @@ apiEndpointUrl datacenter section apiMethod =
   Data.Text.concat ["https://", datacenter, ".api.mailchimp.com/2.0/", section, "/", apiMethod, ".json"]
 
 -- | Perform a query to Mailchimp. Should only be necessary to call directly for 
---   unimplemented methods.
-query :: (FromJSON x) => Text -> Text -> [Pair] -> MailchimpT m x
+--   unimplemented methods. If you infer a return type of Value you will get the
+--   raw JSON object or array. Automatically adds apikey to the request.
+query :: (FromJSON x) => Text
+      -- ^ Mailchimp API section
+      -> Text
+      -- ^ Mailchimp API method
+      -> [Pair]
+      -- ^ Request info
+      -> MailchimpT m x
 query section apiMethod request = do
   apikey <- fmap makApiKey askApiKey
   query' section apiMethod $ filterObject ("apikey" .= apikey : request)

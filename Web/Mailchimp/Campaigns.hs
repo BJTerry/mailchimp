@@ -1,3 +1,4 @@
+-- | Implements the \"campaigns\" section of the Mailchimp JSON API.
 module Web.Mailchimp.Campaigns
   ( CampaignId
   , CampaignInfo (..)
