@@ -38,6 +38,7 @@ module Web.Mailchimp
 
 import Web.Mailchimp.Util
 
+import Prelude hiding (catch)
 import Text.Parsec (parse, many1, hexDigit, char, alphaNum)
 import Text.Parsec.Text (GenParser)
 import Control.Exception.Base (Exception)
@@ -45,7 +46,7 @@ import Control.Exception.Lifted (throwIO, catch)
 import Control.Monad (mzero, MonadPlus, when)
 import Control.Monad.IO.Class (liftIO, MonadIO)
 import Data.Default (def)
-import Data.ByteString.Lazy (fromStrict)
+import Data.ByteString.Lazy (fromChunks)
 import Data.Text (Text, pack, concat, unpack)
 import Data.Typeable (Typeable)
 import Data.Aeson (FromJSON(..), (.:), Value(..), decode, (.=))
@@ -159,7 +160,7 @@ query' section apiMethod request = do
     maybe (throwIO e) throwIO (decodeError headers)
   catchHttpException e = throwIO e
   decodeError :: ResponseHeaders -> Maybe MailchimpError
-  decodeError headers = fromStrict `fmap` lookup "X-Response-Body-Start" headers >>= decode
+  decodeError headers = (fromChunks . return) `fmap` lookup "X-Response-Body-Start" headers >>= decode
 
 data MailchimpError = InvalidApiKey Int Text Text
                     | UserDisabled Int Text Text

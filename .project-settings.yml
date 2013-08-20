@@ -7,8 +7,9 @@ extensions:
   FlexibleContexts: true
   OverloadedStrings: true
 cabal-file: project.cabal
+extra-packages: ''
 version: 1
-environment: null
+environment: ghc-7.4.2-unstable
 module-template: ! 'module MODULE_NAME where
 
 '
