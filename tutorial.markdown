@@ -1,4 +1,4 @@
-The world is full of RESTful JSON APIs that are of interest to developers. While you can often use them in an ad hoc manner if you only need a few features for your Haskell application, sometimes you will be using so much of the API that a complete Haskell interface becomes useful. This tutorial will help you build packages to interface with RESTful JSON APIs.  For the sake of the tutorial will implement an interface for the Mailchimp API, which allows developers to manage e-mail marketing mailing lists. By the end of the tutorial you should be well-prepared to go out and create your own packages. This tutorial assumes a moderate understanding of Haskell.
+The world is full of RESTful JSON APIs that are of interest to developers. While you can often use them in an ad hoc manner if you only need a few features for your Haskell application, sometimes you will be using so much of the API that a complete Haskell interface becomes useful. This tutorial will help you build packages to interface with RESTful JSON APIs.  For the sake of the tutorial will implement an interface for the Mailchimp API, which allows developers to manage e-mail marketing mailing lists. By the end of the tutorial you should be well-prepared to create your own packages. This tutorial assumes an intermediate understanding of Haskell.
 
 # Create Your Package
 
@@ -12,7 +12,7 @@ Your package will be created with a basic .cabal file. I recommend adding declar
 
 # Representing API Keys
 
-The first step to supporting the Mailchimp API is parsing the the API key to build request URLs. In Mailchimp's API, unlike many others, the API key includes the datacenter within it, which must be extracted for the URL. We use the following type to represent an API key, which we will put in the Web.Mailchimp.Client module (the complete source for the mailchimp package is on github):
+The first step to supporting the Mailchimp API is parsing the the API key to build request URLs. In Mailchimp's API, unlike many others, the API key includes the datacenter within it, which must be extracted for the URL. We use the following type to represent an API key, which we will put in the Web.Mailchimp module (the complete source for the mailchimp package is on github):
 
     -- | Represents a mailchimp API key, which implicitly includes a datacenter.
     data MailchimpApiKey = MailchimpApiKey
@@ -125,7 +125,9 @@ Now, this version has a couple of problems (and doesn't compile), but it's a goo
 
     {"email":"example@example.com","euid":"abc123","leid":"abc123"} 
 
-To actually perform the request, we use the [http-conduit package](http://hackage.haskell.org/package/http-conduit), by Michael Snoyman of Yesod fame. That package requires everything be run in a [ResourceT](http://hackage.haskell.org/packages/archive/resourcet/latest/doc/html/Control-Monad-Trans-Resource.html#t:ResourceT) monad transformer (which manages creating and freeing resources, such as network connections), so the function starts with runResourceT. Within this context (ResourceT IO), any actions in the IO monad must be called with [liftIO](http://hackage.haskell.org/packages/archive/transformers/latest/doc/html/Control-Monad-IO-Class.html#t:MonadIO). First, parse the endpoint URL to create the intial request (initReq). Then we set the request options to include our request body and HTTP method. Creating the request body uses the [Aeson](http://hackage.haskell.org/package/aeson) library to create and encode JSON using the object, encode and decode functions. HttpLbs (from http-conduit) is the function that actually performs the request, and we are going to expect back a result of Maybe EmailResult. If we couldn't parse the response we will fail with an error (mzero).
+To actually perform the request, we use the [http-conduit package](http://hackage.haskell.org/package/http-conduit), by Michael Snoyman of Yesod fame. That package requires everything be run in a [ResourceT](http://hackage.haskell.org/packages/archive/resourcet/latest/doc/html/Control-Monad-Trans-Resource.html#t:ResourceT) monad transformer (which manages creating and freeing resources, such as network connections), so the function starts with runResourceT. Within this context (ResourceT IO), any actions in the IO monad must be called with [liftIO](http://hackage.haskell.org/packages/archive/transformers/latest/doc/html/Control-Monad-IO-Class.html#t:MonadIO). 
+
+First, we parse the endpoint URL to create the intial request (initReq). Then we set the request options to include our request body and HTTP method. Creating the request body uses the [Aeson](http://hackage.haskell.org/package/aeson) library (maintained by Bryan O'Sullivan) to create and encode JSON using the object, encode and decode functions. HttpLbs (from http-conduit) is the function that actually performs the request, and we are going to expect back a result of Maybe EmailResult. If we couldn't parse the response we will fail with an error (mzero).
 
 # Creating JSON Instances
 
@@ -150,7 +152,9 @@ The first problem with the code is that we currently don't know how to convert E
 
 The ToJSON instances simply take one of their respective values and create the appropriate JSON objects. FromJSON is a little more complex. The parseJSON function of FromJSON runs in the Parser monad. Within Parser, the .: operator accesses object values by key, allowing us to construct the final value. The parseJSON instance function can parse any type of JSON value (not only objects, but integers, arrays, etc.) but anything other than an object is not an EmailReturn, so we call mzero. If one were reading a field that had a Maybe value (i.e. an optional field), one would instead use the (.:?) operator from Aeson.
 
-While Aeson includes template haskell functions to create ToJSON and FromJSON instances from record definitions for you, beware that the created instances in the current version on Hackage (0.6.1) have two major failings when it comes to RESTful JSON APIs. First, it will fail to parse objects that have *extra* keys that do not appear in your records. Second, it requires that optional "Maybe" fields *actually be present* in the parsed JSON with "null" value, otherwise the parse fails.
+While Aeson includes template haskell functions to create ToJSON and FromJSON instances from record definitions for you, beware that the created instances for FromJSON in the current version on Hackage (0.6.1) have a couple major failings when it comes to RESTful JSON APIs. First, it will fail to parse objects that have *extra* keys that do not appear in your records. Second, it requires that optional "Maybe" fields *actually be present* in the parsed JSON with "null" value, otherwise the parse fails. The function to derive ToJSON instances also adds "null" entries for Nothing values, which would be fine in most APIs but actually causes problems in Mailchimp. A future version is intended to address some of these problems, but is not on Hackage yet. 
+
+More generally, APIs are usually being served in dynamic programming languages, and not from Aeson. There will be lots of edge cases that aren't handled in the way you expect, along with errors. For example, Mailchimp in some instances serializes numbers as JSON strings rather than integers, and it sometimes returns empty lists instead of null values. The only way to know is with extensive unit testing of the API (you can see some example unit tests of Mailchimp in the repository, though they are far from complete). 
 
 # Better Error Handling
 
@@ -168,14 +172,14 @@ Let's create a type to represent API exceptions in Web.Mailchimp.Client. For now
                         | ListDoesNotExist Int Text Text
                         | ListAlreadySubscribed Int Text Text -- Undocumented Error
                         | OtherMailchimpError Int Text Text
-      deriving (Show, Eq)
+      deriving (Typeable, Show, Eq)
 
-    instance Exception MailchimpError
+    instance Exception MailchimpError -- Requires Typeable
 
     instance FromJSON MailchimpError where
       parseJSON (Object v) = do
         status <- v .: "status"
-        if status /= ("error" :: Text) then mzero else return ()
+        when (status /= ("error" :: Text)) mzero
         name <- v .: "name"
         code <- v .: "code"
         message <- v .: "error" -- Documentation shows this is under the "message" key, but it is incorrect
@@ -242,7 +246,7 @@ Exception is defined in [Control.Exception.Base](http://hackage.haskell.org/pack
         Just emailResult -> return emailResult
         Nothing -> throwIO $ OtherMailchimpError (-1) "ParseError" "Could not parse result JSON from Mailchimp"
 
-Because we are in the ResourceT IO monad, we use throwIO and catch from [lifted-base](http://hackage.haskell.org/packages/archive/lifted-base/latest/doc/html/Control-Exception-Lifted.html). They work the same as their analogues in base, but are generalized to a wider variety of monadic contexts. When httpLbs gets a non-200 result, it throws a StatusCodeException, which we catch. Mailchimp's API sends the response body of errors in the X-Response-Body-Start header of the result, so we attempt to decode that and if possible, we throw the appropriate MailchimpError, otherwise we throw the original HttpException. We will also throw an OtherMailchimpError if we couldn't parse the result JSON.
+Because we are in the ResourceT IO monad, we use throwIO and catch from [lifted-base](http://hackage.haskell.org/packages/archive/lifted-base/latest/doc/html/Control-Exception-Lifted.html). They work the same as their analogs in base, but are generalized to a wider variety of monadic contexts. When httpLbs gets a non-200 result, it throws a StatusCodeException, which we catch. Mailchimp's API sends the response body of errors in the X-Response-Body-Start header of the result, so we attempt to decode that and if possible, we throw the appropriate MailchimpError, otherwise we throw the original HttpException. We will also throw an OtherMailchimpError if we couldn't parse the result JSON.
 
 # Trying it Out
 
@@ -319,7 +323,7 @@ Wunderbar! Of course, we don't want to write such a long function for each of Ma
 
 # Using ReaderT
 
-There are still a couple improvements that could be made to the interface. First, we are creating a new Manager each time query is called, which is very inefficient as it's an expensive operation (according to the documentation, at least). Second, if you are making multiple calls within the library, the current syntax could be slightly improved. Suppose that you want to delete all your folders created before a certain date, and you are in a non-IO monadic context, such as in a Yesod Handler. The code to perform that operation would look like this:
+There are still a couple improvements that could be made to the interface. First, we are creating a new Manager each time query is called, which is very inefficient as it's an expensive operation. Second, if you are making multiple calls within the library, the current syntax could be slightly improved. Suppose that you want to delete all your folders created before a certain date, and you are in a non-IO monadic context, such as in a Yesod Handler. The code to perform that operation would look like this:
 
     liftIO $ do
       now <- getCurrentTime
@@ -327,7 +331,7 @@ There are still a couple improvements that could be made to the interface. First
       mapM_ (\f -> deleteFolder apiKey (folderId f) (folderType f)) $ 
         filter (\folder -> dateCreated folder < (now - 60 * 60 * 24 * 7)) folders
 
-For every action, we are passing in apiKey even though the key is obviously not changing. One can imagine even more complex actions where it would be more of a burden. To solve this problem and the problem of creating potentially hundreds of managers, let's wrap up our actions in a monad, specfically in [ReaderT](http://hackage.haskell.org/packages/archive/mtl/latest/doc/html/Control-Monad-Reader.html#v:ReaderT). We'll also create a MailchimpConfig type to carry the apiKey and the shared Manager:
+For every action, we are passing in apiKey even though the key is not changing. One can imagine even more complex actions where it would be more of a burden. To solve this problem and the problem of creating potentially hundreds of managers, let's wrap up our actions in a monad, specfically in [ReaderT](http://hackage.haskell.org/packages/archive/mtl/latest/doc/html/Control-Monad-Reader.html#v:ReaderT). We'll also create a MailchimpConfig type to carry the apiKey and the shared Manager:
 
     data MailchimpConfig = MailchimpConfig 
       { mcApiKey :: MailchimpApiKey
@@ -365,7 +369,7 @@ With these changes query and subscribeUser now look like this:
         Nothing -> throwIO $ OtherMailchimpError (-1) "ParseError" "Could not parse result JSON from Mailchimp"
      where
       catchHttpException :: HttpException -> Mailchimp a
-      catchHttpException e@(StatusCodeException _ headers _) = do
+      catchHttpException e@(StatusCodeException _ headers _) = 
         maybe (throwIO e) id (throwIO `fmap` (decodeError headers))
       catchHttpException e = throwIO e
       decodeError :: ResponseHeaders -> Maybe MailchimpError
@@ -414,7 +418,7 @@ As is the case with many JSON APIs, Mailchimp has a couple idiosyncrasies that a
 
 Another issue with the API is Mailchimp's time format. Mailchimp sends and receives times as "YYYY-MM-DD HH:MM:SS" in GMT, while Aeson only tries to read UTCTime as ECMA-262 ISO-8601 format (YYYY-MM-DDTHH:MM:SS.sZ). Instead of relying on Aeson's instance of ToJSON UTCTime and FromJSON UTCTime, we newtype UTCTime and instance the new type:
 
-newtype MCTime = MCTime {unMCTime :: UTCTime}
+    newtype MCTime = MCTime {unMCTime :: UTCTime}
 
     mcFormatString :: String
     mcFormatString = "%F %T"
@@ -470,15 +474,17 @@ Now we can add debugging statements anywhere in the Mailchimp monad and they wil
       decodeError :: ResponseHeaders -> Maybe MailchimpError
       decodeError headers = fromStrict `fmap` (lookup "X-Response-Body-Start" headers) >>= decode
 
+If you are just using your package outside of the context of Yesod applications, you can probably stop here and still have a nice, full-featured library that's easy to use in IO. If you ARE using Yesod, though, there is one more useful change.
+
 # MailchimpT Monad Transformer
 
-This is pretty handy, but it might interact negatively with existing logging functionality in a user's application. They may want to bring their own logging to the table. For example, if you are developing a Yesod application, your Handler monad already includes MonadLogger, and you can control the output level for development vs. production. Instead of giving Mailchimp a defined monad stack, let's make it into a monad transformer that merely requires logging.
+The way Mailchimp is currently written it might interact negatively with existing logging functionality in a user's application. They may want to bring their own logging to the table. For example, if you are developing a Yesod application, your Handler monad already includes MonadLogger, and you can control the output level for development vs. production. Instead of giving Mailchimp a defined monad stack, let's make it into a monad transformer that merely requires logging.
 
-By making Mailchimp into a monad transformer, we also allow users to interleave actions from the Mailchimp monad and their own monad in a single do-block (or other standard monadic operations). To make the change, we enable RankNTypes (this allows the type constraints in the below type definition) and specify in our Mailchimp type the monadic instances that we require to run, in this case MonadIO (for IO), MonadLogger (for logging) and MonadBase IO (for throwing and catching exceptions). Using monad transformers in this manner basically specifies a required set of capabilities. To make life easier, we move uses of runResourceT down into query only where they are needed, because we don't need it's functionality everywhere and because getting all of its constraints to typecheck is a pain.
+By making Mailchimp into a monad transformer, we also allow users to interleave actions from the Mailchimp monad and their own monad in a single do-block (or other standard monadic operations). To make the change, we enable RankNTypes (this allows the type constraints in the below type definition) and specify in our Mailchimp type the monadic instances that we require to run, in this case MonadIO (for IO), MonadLogger (for logging) and MonadBaseControl IO (used by query to throw and catch exceptions from ResourceT). Using monad transformers in this manner basically specifies a required set of capabilities. To make life easier, we move uses of runResourceT down into query only where they are needed, because we don't need it's functionality everywhere and because getting all of its constraints to typecheck is a pain.
 
-    type MailchimpT m a =  (MonadIO m, MonadLogger m, MonadBase IO m) => ReaderT MailchimpConfig m a
+    type MailchimpT m a =  (MonadIO m, MonadLogger m, MonadBaseControl IO m) => ReaderT MailchimpConfig m a
 
-    runMailchimpT :: (MonadIO m, MonadLogger m, MonadBase IO m) => MailchimpConfig -> MailchimpT m a -> m a
+    runMailchimpT :: (MonadIO m, MonadLogger m, MonadBaseControl IO m) => MailchimpConfig -> MailchimpT m a -> m a
     runMailchimpT config action = 
       flip runReaderT config action
 
@@ -487,8 +493,8 @@ By making Mailchimp into a monad transformer, we also allow users to interleave 
     runMailchimp config action =
       liftIO $ runStderrLoggingT $ flip runReaderT config action
 
-If people don't want to use MailchimpT, they can instead use runMailchimp in IO which will build up the monad stack with stderr logging.
+If people don't want to use MailchimpT, they can instead use runMailchimp in IO which will build up the monad stack itself.
 
 # Conclusion
 
-At this point the core of the package is written, and the rest is just translating the API documentation into Haskell code, i.e. extensive boilerplate. 
+At this point the core of the package is written, and the rest is just translating the API documentation into Haskell code, i.e. extensive boilerplate. If you want to see what all this boilerplate looks like, you can check out the complete source for the Web.Mailchimp.Lists on GitHub, as well as a simple setup for performing tests with HUnit. Hopefully you have found this tutorial useful, thanks for reading!
