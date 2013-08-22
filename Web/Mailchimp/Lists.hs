@@ -113,7 +113,7 @@ import Data.Text (Text, unpack)
 import Data.Aeson (Value(..), object, (.=), ToJSON(..), FromJSON(..), (.:), (.:?), Value(..))
 import Data.Aeson.Types (Pair)
 import Data.Aeson.TH (deriveFromJSON, deriveToJSON)
-import Control.Monad (mzero)
+import Control.Monad (mzero, when)
 import Control.Applicative ((<|>))
 import Data.Time.Clock (UTCTime)
 import Data.Maybe (catMaybes)
@@ -459,9 +459,10 @@ instance FromJSON ClientResults where
     -- Returns empty lists if there are no clients
     return $ ClientResults cr_desktop cr_mobile
    where
-    resultsOrArray k = case Data.HashMap.Strict.lookup k v of
-                         Just (Object _) -> v .:? k
-                         _ -> return Nothing
+    resultsOrArray k = v .:? k <|> do
+      mArray <- v .:? k
+      if ((mArray :: Maybe [Text]) == Just []) then (return Nothing) else fail "Could not parse array in ClientResults"
+
   parseJSON _ = mzero
 
 -- $(deriveFromJSON (convertName 2) ''ClientResults)
