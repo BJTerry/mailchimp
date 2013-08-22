@@ -109,16 +109,17 @@ import Web.Mailchimp
 import Web.Mailchimp.Campaigns (CampaignId, CampaignInfo(..) )
 import Web.Mailchimp.Util
 
-import Data.Text (Text)
+import Data.Text (Text, unpack)
 import Data.Aeson (Value(..), object, (.=), ToJSON(..), FromJSON(..), (.:), (.:?), Value(..))
 import Data.Aeson.Types (Pair)
 import Data.Aeson.TH (deriveFromJSON, deriveToJSON)
 import Control.Monad (mzero)
+import Control.Applicative ((<|>))
 import Data.Time.Clock (UTCTime)
 import Data.Maybe (catMaybes)
 import Data.Default (Default(..))
 import Text.Read (readMaybe)
-import Data.HashMap.Strict (lookup)
+
 
 -- | Represents an individual mailing list
 newtype ListId = ListId {unListId :: Text}
@@ -496,10 +497,11 @@ instance FromJSON GrowthHistoryResult where
                                , ghrOptins = ghr_optins
                                }
    where
-    numberOrString k = case Data.HashMap.Strict.lookup k v of
-                         Just (String _) -> fmap readMaybe $ v .: k
-                         Just (Number _) -> v .:? k
-                         _ -> return Nothing
+    numberOrString k = (do
+      mText <- (v .:? k) 
+      let mInt = fmap unpack mText >>= readMaybe
+      return mInt)
+      <|> (v .:? k)
   parseJSON _ = mzero
 
 
