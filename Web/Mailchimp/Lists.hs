@@ -454,15 +454,15 @@ data ClientResults = ClientResults
 
 instance FromJSON ClientResults where
   parseJSON (Object v) = do
-    cr_desktop <- resultsOrArray "desktop"
-    cr_mobile <- resultsOrArray "mobile"
+    cr_desktop <- v .:? "desktop" <|> checkArray "desktop"
+    cr_mobile <- v .:? "mobile" <|> checkArray "mobile"
     -- Returns empty lists if there are no clients
     return $ ClientResults cr_desktop cr_mobile
    where
-    resultsOrArray k = v .:? k <|> do
-      mArray <- v .:? k
-      if ((mArray :: Maybe [Text]) == Just []) then (return Nothing) else fail "Could not parse array in ClientResults"
-
+     checkArray k = do
+       mArr <- v .:? k
+       if mArr == Just ([] :: [Text]) then return Nothing
+                          else fail "Non-empty array in ClientResults"
   parseJSON _ = mzero
 
 -- $(deriveFromJSON (convertName 2) ''ClientResults)
